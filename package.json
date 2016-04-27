@@ -1,0 +1,23 @@
+{
+  "name": "servant-server",
+  "version": "1.0.0",
+  "description": "Servant main server",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "servant",
+    "server"
+  ],
+  "author": "Vitaliy Orlov",
+  "license": "MIT",
+  "dependencies": {
+    "async": "^1.5.2",
+    "mongoose": "^4.4.12",
+    "nconf": "^0.8.4",
+    "vow": "^0.4.12",
+    "winston": "^2.2.0",
+    "ws": "^1.1.0"
+  }
+}

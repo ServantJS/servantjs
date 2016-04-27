@@ -1,0 +1,27 @@
+{
+  "ip": "127.0.0.1",
+  "port": 8010,
+  "heartbeat": 0,
+
+  "db": {
+    "url": "mongodb://127.0.0.1:27017/servant"
+  },
+
+  "middlewares": [
+    "check-workers"
+  ],
+
+  "modules": [
+    {
+      "name": "security",
+      "keyFilePath": "/Users/vitaliyorlov/Desktop/ServantJS/server/file.key"
+    },
+    {
+      "name": "haproxy",
+      "depends": {
+        "middlewares": ["check-workers"],
+        "modules": []
+      }
+    }
+  ]
+}
