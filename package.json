@@ -1,13 +1,13 @@
 {
-  "name": "servant-server",
+  "name": "servantjs-server",
   "version": "1.0.0",
-  "description": "Servant main server",
+  "description": "ServantJS main server",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "servant",
+    "servantjs",
     "server"
   ],
   "author": "Vitaliy Orlov",
