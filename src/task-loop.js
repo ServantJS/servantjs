@@ -24,13 +24,14 @@ class TaskLoop extends EventEmitter {
     }
 
     _iterate() {
-        db.TaskModel.findOne({status: core.statuses.create, server_id: this.server._id}, '_id cmd module params server_id target_id status').exec((err, task) => {
+        db.TaskModel.find({status: core.statuses.create, server_id: this.server._id}, '_id cmd module params server_id target_id status').sort('dt').limit(1).exec((err, tasks) => {
             if (err) {
                 logger.error(err.message);
                 logger.verbose(err.stack);
-            } else if (!task) {
+            } else if (!tasks.length) {
                 // in case of empty result
             } else {
+                const task = tasks[0];
                 logger.debug(`Receive new task: module - ${task.module}; cmd - ${task.cmd}; params - ${task.params}`);
 
                 try {

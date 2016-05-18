@@ -135,7 +135,7 @@ class HAProxyModule extends ModuleBase {
      * @public
      */
     sendError(text, agent) {
-        agent.socket.sendJSON(this.createMessage(HAProxyModule.SendErrorEvent, text).toObject());
+        agent.sendMessage(this.createMessage(HAProxyModule.SendErrorEvent, text));
         agent.socket.close();
 
         logger.warn(`[${this.name}]: Close connection for: ${agent.ip}. Reason: ${text}`);
@@ -211,7 +211,7 @@ class HAProxyModule extends ModuleBase {
                 }
             },
             (cb) => {
-                this.moduleDB.HAProxyConfigModel.findOne({name: params.name}, (err, config) => {
+                this.moduleDB.HAProxyConfigModel.findOne({name: params.name, target_id: task.target_id}, (err, config) => {
                     if (err) {
                         cb(err);
                     } else if (config) {
@@ -549,8 +549,6 @@ class HAProxyModule extends ModuleBase {
             },
             (config, configs, amountOfServers, cb) => {
                 try {
-                    //config.content = params.content;
-
                     if (!this.checkStringParam(params, 'name')) {
                         config.name = params.name;
                     }
@@ -560,7 +558,7 @@ class HAProxyModule extends ModuleBase {
                     }
 
                     if (!this.checkNumberParam(params, 'order_number')) {
-                        if (config.kind === GLOBAL_CONFIG_TYPE && params.order_number === 0) {
+                        if (config.kind !== GLOBAL_CONFIG_TYPE && params.order_number === 0) {
                             params.order_number = 1;
                         }
 
@@ -662,7 +660,12 @@ class HAProxyModule extends ModuleBase {
 
                 }
 
-                message.data.report.splice(0, 0, 'Worker: ' + agent.hostname);
+                //TODO think
+                if (!message.data.report) {
+                    message.data.report = [];
+                } else {
+                    message.data.report.splice(0, 0, 'Worker: ' + agent.hostname);
+                }
 
                 task.report.push({
                     worker_id: agent.worker._id,

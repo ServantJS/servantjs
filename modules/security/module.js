@@ -94,7 +94,7 @@ class SecurityModule extends ModuleBase {
      * @public
      */
     sendError(text, agent) {
-        agent.socket.sendJSON(this.createMessage(SecurityModule.SendErrorEventName, text).toObject());
+        agent.sendMessage(this.createMessage(SecurityModule.SendErrorEventName, text));
         agent.socket.close();
 
         logger.warn(`[${this.name}]: Close connection for: ${agent.ip}. Reason: ${text}`);
@@ -176,7 +176,7 @@ class SecurityModule extends ModuleBase {
                                 logger.info(`Worker "${worker.server_name}[${worker.ip}]" authorized on server`);
                                 logger.debug(`Worker "${agent.hostname}": enabled modules - [${message.data.modules.join(' | ')}]`);
 
-                                agent.socket.sendJSON(this.createMessage(SecurityModule.SaveTokenEventName, null, {token: token}).toObject());
+                                agent.sendMessage(this.createMessage(SecurityModule.SaveTokenEventName, null, {token: token}));
                             }
                         });
                     });

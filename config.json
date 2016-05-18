@@ -14,7 +14,7 @@
   "modules": [
     {
       "name": "security",
-      "keyFilePath": "./file.key"
+      "keyFilePath": "/Users/vitaliyorlov/Desktop/ServantJS/servantjs/file.key"
     },
     {
       "name": "haproxy",

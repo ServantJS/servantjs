@@ -135,7 +135,28 @@ class ServantClient {
 
     sendMessage(message) {
         if (message instanceof ServantMessage) {
-            this.socket.send(message.toJSON());
+            let index = 0;
+            let stage = this.server.stacks[coreMW.MESSAGE_SEND_STAGE];
+
+            const nextStage = (err) => {
+                let layer = stage[index++];
+
+                if (!layer) { //end reached
+                    if (err) {
+                        return defer(this.out, err);
+                    } else {
+                        return this.socket.send(message.toJSON());
+                    }
+                }
+
+                if (layer.route !== 'dummy' && message.module.toLowerCase() !== layer.route) {
+                    return nextStage(err);
+                }
+
+                ServantClient.call(layer.handle, this, message, err, nextStage);
+            };
+
+            nextStage();
         } else {
             throw new Error('"message" is not instance of "ServantMessage"');
         }
