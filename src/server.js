@@ -66,6 +66,10 @@ class ServantServer extends MiddlewareStack {
     }
 
     _wsOnConnect(socket) {
+        if (this._workers.hasOwnProperty(socket.address())) {
+            this._workers[socket.address()].socket.close();
+        }
+
         var client = new ServantClient(this, socket);
         this._workers[client.ip] = client;
 
