@@ -46,7 +46,7 @@ class ServantClient {
         this.server.workers[this.ip] = null;
         delete this.server.workers[this.ip];
 
-        logger.debug('Current agents: ' + this.currentAgentsCount);
+        logger.debug('Current agents: ' + this.server.currentAgentsCount);
 
         clearInterval(this.intervalId);
 
