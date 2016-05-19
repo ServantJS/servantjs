@@ -221,6 +221,14 @@ class HAProxyModule extends ModuleBase {
                         logger.error(e.message);
                         logger.verbose(e.stack);
                     }
+                } else {
+                    originalTask.status = this.statuses.success;
+                    originalTask.save((err) => {
+                        if (err) {
+                            logger.error(err.message);
+                            logger.verbose(err.stack);
+                        }
+                    });
                 }
             }
         });
@@ -353,6 +361,14 @@ class HAProxyModule extends ModuleBase {
                         logger.error(e.message);
                         logger.verbose(e.stack);
                     }
+                } else {
+                    originalTask.status = this.statuses.success;
+                    originalTask.save((err) => {
+                        if (err) {
+                            logger.error(err.message);
+                            logger.verbose(err.stack);
+                        }
+                    });
                 }
             }
         });
