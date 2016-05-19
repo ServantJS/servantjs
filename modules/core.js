@@ -1,5 +1,6 @@
 'use strict';
 
+const vow = require('vow');
 const EventEmitter = require('events');
 const ServantMessage = require('./message').ServantMessage;
 
@@ -44,6 +45,41 @@ class ModuleBase extends EventEmitter {
 
     handle() {
         throw new Error('Method not implemented.');
+    }
+
+    getTaskAgents(targetId) {
+        const defer = vow.defer();
+
+        if (!(targetId && targetId.length)) {
+            defer.reject(new Error('Missing target id'));
+            return defer.promise();
+        }
+
+        if (targetId[0] === 'G') {
+            this.serverDB.WorkersGroupModel.findOne({sys_id: targetId}).populate('workers').exec(function (err, group) {
+                if (err) {
+                    defer.reject(err);
+                } else if (!group) {
+                    defer.reject(new Error(`Group "${targetId} not found`));
+                } else {
+                    defer.resolve(group.workers);
+                }
+            });
+        } else if (targetId[0] === 'W') {
+            this.serverDB.WorkerModel.findOne({sys_id: targetId}).exec(function (err, worker) {
+                if (err) {
+                    defer.reject(err);
+                } else if (!worker) {
+                    defer.reject(new Error(`Worker "${targetId} not found`));
+                } else {
+                    defer.resolve([worker]);
+                }
+            });
+        } else {
+            defer.reject(new Error('Incorrect target id'));
+        }
+
+        return defer.promise();
     }
 
     createMessage(event, error, data) {
