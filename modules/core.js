@@ -4,6 +4,8 @@ const vow = require('vow');
 const EventEmitter = require('events');
 const ServantMessage = require('./message').ServantMessage;
 
+const logger = require('../lib/logger');
+
 const statuses = exports.statuses = {
     create: -1,
     success: 0,
@@ -47,6 +49,24 @@ class ModuleBase extends EventEmitter {
         throw new Error('Method not implemented.');
     }
 
+    /**
+     *
+     * @param {String} text
+     * @param {ServantClient} agent
+     * @public
+     */
+    sendError(text, agent) {
+        agent.sendMessage(this.createMessage('Error', text));
+        agent.socket.close();
+
+        logger.warn(`[${this.name}]: Close connection for: ${agent.ip}. Reason: ${text}`);
+    }
+
+    /**
+     *
+     * @param {String} targetId
+     * @returns {Promise}
+     */
     getTaskAgents(targetId) {
         const defer = vow.defer();
 
