@@ -63,6 +63,10 @@ class ModuleBase extends EventEmitter {
     checkNumberParam(obj, paramName) {
         return !obj.hasOwnProperty(paramName) || isNaN(parseInt(obj[paramName]));
     }
+
+    checkArrayParam(obj, paramName) {
+        return !(obj.hasOwnProperty(paramName) && Array.isArray(obj[paramName]) && obj[paramName].length);
+    }
 }
 
 exports.ModuleBase = ModuleBase;
