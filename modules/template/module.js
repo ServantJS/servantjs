@@ -6,7 +6,7 @@ const ServantMessage = require('../message').ServantMessage;
 const logger = require('../core').logger;
 const db = require('../core').db;
 
-const MODULE_NAME = 'haproxy';
+const MODULE_NAME = 'test';
 const MODULE_VERSION = '1.0';
 
 class TestModule extends ModuleBase {
