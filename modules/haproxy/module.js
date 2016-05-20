@@ -294,7 +294,7 @@ class HAProxyModule extends ModuleBase {
                                     return next(new Error(`Unsupported config kind for ${item.name}`));
                                 }
 
-                                if (item.kind === LISTEN_CONFIG_TYPE || item.kind === FRONTEND_CONFIG_TYPE) {
+                                if (item.status == this.statuses.success && (item.kind === LISTEN_CONFIG_TYPE || item.kind === FRONTEND_CONFIG_TYPE)) {
                                     isContainsServer = true;
                                 }
 
