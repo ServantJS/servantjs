@@ -10,7 +10,10 @@ const ServantServer = require('./src/server').ServantServer;
 
 var server = new ServantServer({
     middlewares: config.get('middlewares'),
-    modules: config.get('modules')
+    modules: config.get('modules'),
+    ip: config.get('ip'),
+    port: config.get('port'),
+    heartbeat: config.get('heartbeat')
 });
 
 server.init()
