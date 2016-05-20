@@ -455,24 +455,22 @@ class HAProxyModule extends ModuleBase {
                     task.error = [];
                 }
 
-                if (cacheItem.agentsCount != task.report.length) {
-                    message.data.report.splice(0, 0, 'Worker: ' + agent.hostname);
+                message.data.report.splice(0, 0, 'Worker: ' + agent.hostname);
 
-                    task.report.push({
+                task.report.push({
+                    worker_id: agent.worker._id,
+                    stack: message.data.report.join('\n')
+                });
+
+                if (message.error) {
+                    task.status = this.statuses.warning;
+                    task.error.push({
                         worker_id: agent.worker._id,
-                        stack: message.data.report.join('\n')
+                        stack: 'Worker: ' + agent.hostname + '\n' + message.error
                     });
-
-                    if (message.error) {
-                        task.status = this.statuses.warning;
-                        task.error.push({
-                            worker_id: agent.worker._id,
-                            stack: 'Worker: ' + agent.hostname + '\n' + message.error
-                        });
-                    }
                 }
 
-                if (cacheItem.agentsCount == task.error.length) {
+                if (cacheItem.agentsCount == task.report.length && task.error.length) {
                     task.save((err) => {
                         if (err) {
                             logger.error(err.message);
