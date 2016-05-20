@@ -53,7 +53,7 @@ class SecurityMiddleWare extends MiddlewareBase {
                         }
 
                         if (!res) {
-                            return next(new Error('Worker "{0}" does not running'.f(group.workers[i])));
+                            return next(new Error(`Worker "${group.workers[i].sys_id}" does not running`));
                         }
                     }
                     task.agents = agents;
@@ -79,7 +79,7 @@ class SecurityMiddleWare extends MiddlewareBase {
                         }
                     }
 
-                    next(new Error('Worker "{0}" does not running'.f(worker._id)));
+                    next(new Error(`Worker "${worker.sys_id}" does not running`));
                 }
             });
         } else {
