@@ -36,8 +36,6 @@ verlt ${NODE_VER#"v"} "5.0.0"  && (echo "Support only Node.js >= 5.x.x"; exit 1)
 NPM_VER=`npm -v`
 verlt ${NPM_VER} "2.0.0"  && (echo "Support only NPM >= 2.x.x"; exit 1)
 
-exit 1
-
 echo "Creating dir: ${INSTALL_DIR}"
 mkdir -p ${INSTALL_DIR}
 
