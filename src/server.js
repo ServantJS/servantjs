@@ -187,13 +187,13 @@ class ServantServer extends MiddlewareStack {
             },
             (callback) => {
                 logger.verbose('Connect to DB: success');
-                db.CCServerModel.findOne({server_name: os.hostname(), port: this.port}, (err, server) => {
+                db.ServerModel.findOne({server_name: os.hostname(), port: this.port}, (err, server) => {
                     if (err) {
                         return callback(err);
                     } else if (!err && !server) {
                         logger.verbose('New server saved in db');
 
-                        server = new db.CCServerModel({
+                        server = new db.ServerModel({
                             server_name: os.hostname(),
                             port: this.port
                         });

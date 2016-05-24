@@ -9,7 +9,7 @@ const db = require('../lib/db');
 class TaskLoop extends EventEmitter {
     /**
      *
-     * @param {CCServerModel} server
+     * @param {ServerModel} server
      * @param {Number} interval
      */
     constructor(server, interval) {

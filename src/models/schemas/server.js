@@ -3,7 +3,7 @@
 const mongoose = require('mongoose');
 const Schema   = mongoose.Schema;
 
-const CCServerSchema = exports.CCServerSchema = new Schema({
+const ServerSchema = exports.ServerSchema = new Schema({
     dt: Date,
     server_name: String,
     ip: String,
@@ -11,7 +11,7 @@ const CCServerSchema = exports.CCServerSchema = new Schema({
     status: Number
 });
 
-CCServerSchema.pre('save', function (next) {
+ServerSchema.pre('save', function (next) {
     if (this.isModified('status')) {
         this.dt = new Date();
     }
@@ -19,4 +19,4 @@ CCServerSchema.pre('save', function (next) {
     next();
 });
 
-mongoose.model('CCServer', CCServerSchema);
+mongoose.model('Server', ServerSchema);

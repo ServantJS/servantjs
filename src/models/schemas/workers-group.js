@@ -8,7 +8,7 @@ const ext = require('../../extensions');
 const WorkersGroupSchema = exports.WorkersGroupSchema = new Schema({
     name: String,
     sys_id: {type: String, index: true, unique: true},
-    server_id: {type: Schema.Types.ObjectId, ref: 'CCServer'},
+    server_id: {type: Schema.Types.ObjectId, ref: 'Server'},
     workers: [{type: Schema.Types.ObjectId, ref: 'Worker'}]
 });
 

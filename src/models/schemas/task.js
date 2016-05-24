@@ -12,7 +12,7 @@ const TaskSchema = exports.TaskSchema = new Schema({
     dt: Date,
     username: String,
 
-    server_id: {type: Schema.Types.ObjectId, ref: 'CCServer', index: true},
+    server_id: {type: Schema.Types.ObjectId, ref: 'Server', index: true},
     //workers: [{type: Schema.Types.ObjectId, ref: 'Worker'}],
 
     target_id: {type: String},
