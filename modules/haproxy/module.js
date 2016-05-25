@@ -165,12 +165,15 @@ class HAProxyModule extends ModuleBase {
                                     isContainsServer = true;
                                 }
 
-                                model.container.push({
+                                const containerItem = {
                                     kind: config.kind,
                                     name: config.name,
                                     content: config.content,
-                                    status: 0
-                                });
+                                    status: 0,
+                                    meta: config.meta || []
+                                };
+
+                                model.container.push(containerItem);
 
                                 index++;
                                 next();
@@ -188,7 +191,10 @@ class HAProxyModule extends ModuleBase {
 
                                     const message = this.createMessage(HAProxyModule.CreateEvent, null, {
                                         taskKey: task._id.toString(),
-                                        config: model.container.map((item) => item.content).join('\n\n')
+                                        config: model.container
+                                            .map((item) =>
+                                                (item.kind > 0 ? '#' + item.meta.map((item) => `${item.token_name}: ${item.value}`).join(', ') + '\n' : '') + item.content)
+                                            .join('\n\n')
                                     });
 
                                     cb(null, message);
@@ -300,16 +306,19 @@ class HAProxyModule extends ModuleBase {
                                     return next(new Error(`Unsupported config kind for ${item.name}`));
                                 }
 
-                                if (item.status == this.statuses.success && this.hasBind(config)) {
+                                if (item.status == this.statuses.success && this.hasBind(item)) {
                                     isContainsServer = true;
                                 }
 
-                                config.container.push({
+                                const containerItem = {
                                     kind: item.kind,
                                     name: item.name,
                                     content: item.content,
-                                    status: item.status
-                                });
+                                    status: item.status,
+                                    meta: item.meta || []
+                                };
+
+                                config.container.push(containerItem);
 
                                 index++;
                                 next();
@@ -329,7 +338,9 @@ class HAProxyModule extends ModuleBase {
                                 if (isContainsServer) {
                                     msgData.config = config.container
                                         .filter((item) => item.status == 0)
-                                        .map((item) => item.content).join('\n\n')
+                                        .map(
+                                            (item) => (item.kind > 0 ? '#' + item.meta.map((item) => `${item.token_name}: ${item.value}`).join(', ') + '\n' : '') + item.content)
+                                        .join('\n\n')
                                 } else {
                                     msgData.dispose = true;
                                 }

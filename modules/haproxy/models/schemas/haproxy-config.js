@@ -3,7 +3,11 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const schema = require('./haproxy-setting').HAProxySettingSchema;
+const HAProxySettingItemSchema = new Schema({
+    token_name: String,
+    description: String,
+    value: String
+}, {_id: false});
 
 const HAProxyConfigItemSchema = exports.HAProxyConfigItemSchema = new Schema({
     kind: {type: Number, index: true},
@@ -12,7 +16,7 @@ const HAProxyConfigItemSchema = exports.HAProxyConfigItemSchema = new Schema({
 
     status: Number,
 
-    meta: [schema]
+    meta: [HAProxySettingItemSchema]
 }, {_id: false});
 
 const HAProxyConfigSchema = exports.HAProxyConfigSchema = new Schema({
