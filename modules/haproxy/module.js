@@ -18,12 +18,14 @@ const GLOBAL_CONFIG_TYPE = 0;
 const DEFAULT_CONFIG_TYPE = 1;
 const LISTEN_CONFIG_TYPE = 2;
 const FRONTEND_CONFIG_TYPE = 3;
+const BACKEND_CONFIG_TYPE = 4;
 
 const KIND_LIST = [
     GLOBAL_CONFIG_TYPE,
     DEFAULT_CONFIG_TYPE,
     LISTEN_CONFIG_TYPE,
-    FRONTEND_CONFIG_TYPE
+    FRONTEND_CONFIG_TYPE,
+    BACKEND_CONFIG_TYPE
 ];
 
 class HAProxyModule extends ModuleBase {
@@ -100,6 +102,10 @@ class HAProxyModule extends ModuleBase {
             logger.warn(`[${this.name}] Unsupported event "${message.event}". Worker: ${agent.ip}`);
         }
     }
+    
+    hasBind(block) {
+        return block.kind === LISTEN_CONFIG_TYPE || block.kind === FRONTEND_CONFIG_TYPE;    
+    }
 
     /**
      *
@@ -155,7 +161,7 @@ class HAProxyModule extends ModuleBase {
                                     return next(new Error(`Unsupported config kind for ${config.name}`));
                                 }
 
-                                if (config.kind === LISTEN_CONFIG_TYPE || config.kind === FRONTEND_CONFIG_TYPE) {
+                                if (this.hasBind(config)) {
                                     isContainsServer = true;
                                 }
 
@@ -294,7 +300,7 @@ class HAProxyModule extends ModuleBase {
                                     return next(new Error(`Unsupported config kind for ${item.name}`));
                                 }
 
-                                if (item.status == this.statuses.success && (item.kind === LISTEN_CONFIG_TYPE || item.kind === FRONTEND_CONFIG_TYPE)) {
+                                if (item.status == this.statuses.success && this.hasBind(config)) {
                                     isContainsServer = true;
                                 }
 
