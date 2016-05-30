@@ -6,7 +6,7 @@ const TestModule = require('./module').TestModule;
 const logger = require('../core').logger;
 
 module.exports = (serverDB, serverInstance, server, options) => {
-    let module = new HAProxyModule(serverDB, db, serverInstance, server, options);
+    let module = new TestModule(serverDB, db, serverInstance, server, options);
 
     logger.info(`Init "${module.name.toUpperCase()}" module. Version - ${module.version}`);
 
