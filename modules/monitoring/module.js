@@ -31,6 +31,8 @@ class MonitoringModule extends ModuleBase {
 
         this._intervals = {};
 
+        this.on('task.update-settings', this._onUpdateSettingsTask.bind(this));
+
         this.init();
     }
 
@@ -102,7 +104,7 @@ class MonitoringModule extends ModuleBase {
     }
 
     _metricHandler(metric, settings) {
-        logger.verbose(`Run metric ${metric.sys_name}`);
+        logger.info(`Running metric "${metric.sys_name}"`);
         
         this._intervals[metric.sys_name] = setInterval(() => {
             for (let k in this._serverInstance.workers) {
@@ -123,7 +125,66 @@ class MonitoringModule extends ModuleBase {
         if (this._intervals.hasOwnProperty(metricName)) {
             clearInterval(this._intervals[metricName]);
             delete this._intervals[metricName];
+
+            logger.info(`Metric "${metricName}" stopped`);
         }
+    }
+
+    /**
+     *
+     * @param {Object} task
+     * @param {Object} params
+     * @param {TaskModel} originalTask
+     * @private
+     */
+    _onUpdateSettingsTask(task, params, originalTask) {
+        async.waterfall([
+            (cb) => {
+                try {
+                    if (this.checkStringParam(params, 'id')) {
+                        cb(new Error('Missing "id" parameter'));
+                    } else {
+                        const id = mongoose.Types.ObjectId(params.id);
+
+                        this.moduleDB.MetricModel.findOne({_id: id, 'settings.server_id': this.server._id}, 'sys_name settings.$', (err, metric) => {
+                            if (err) {
+                                cb(err);
+                            } else if (!metric) {
+                                cb(new Error(`Metric "${params.id}" does not exist for server`));
+                            } else {
+                                this._disposeMetric(metric.sys_name);
+
+                                if (metric.settings[0].isActive) {
+                                    this._metricHandler(metric, metric.settings[0]);
+                                }
+
+                                cb(null, metric);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    cb(e);
+                }
+            }
+        ], (err, metric) => {
+            if (err) {
+                logger.error(err.message);
+                logger.verbose(err.stack);
+
+                originalTask.internal_error = err.message;
+                originalTask.status = this.statuses.error;
+            } else {
+                originalTask.status = this.statuses.success;
+                logger.verbose(`Metric ${metric.sys_name} successfully updated`);
+            }
+
+            originalTask.save((err) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                }
+            });
+        });
     }
 
     /**
@@ -138,6 +199,12 @@ class MonitoringModule extends ModuleBase {
         }
     }
 
+    /**
+     *
+     * @param {ServantMessage} message
+     * @param {ServantClient} agent
+     * @private
+     */
     _collectCPUData(message, agent) {
         const ts = new Date();
         async.waterfall([
