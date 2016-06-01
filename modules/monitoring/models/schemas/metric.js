@@ -3,7 +3,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-var SettingItemSchema = new Schema({
+const SettingItemSchema = new Schema({
     name: String,
     value: String
 }, {_id: false});
