@@ -113,7 +113,7 @@ class ModuleBase extends EventEmitter {
     }
 
     checkStringParam(obj, paramName) {
-        return !(obj.hasOwnProperty(paramName) && typeof obj[paramName] === 'string' && obj[paramName].length && obj[paramName].trim().length);
+        return !(obj.hasOwnProperty(paramName) && typeof obj[paramName] === 'string' && obj[paramName].trim().length);
     }
 
     checkNumberParam(obj, paramName) {
