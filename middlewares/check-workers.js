@@ -26,6 +26,10 @@ class SecurityMiddleWare extends MiddlewareBase {
             next(new Error('Missing target id'));
         }
 
+        if (task.target_id === 'SERVER') {
+            return next();
+        }
+
         if (!Object.keys(server.workers).length) {
             return next(new Error('Server does not have any connected workers'));
         }
