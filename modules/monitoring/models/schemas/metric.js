@@ -3,16 +3,22 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const SettingItemSchema = new Schema({
-    name: String,
+var SettingItemSchema = new Schema({
+    name: {
+        ru: String,
+        us: String
+    },
+    sys_name: String,
     value: String
 }, {_id: false});
 
 const MetricSettingSchema = exports.MetricSettingSchema = new Schema({
     server_id: {type: Schema.Types.ObjectId, ref: 'Server'},
-    
+
     isActive: Boolean,
     interval: Number,
+
+    view_order: Number,
 
     threshold: {
         repeat: Number,
@@ -41,8 +47,9 @@ const MetricSchema = exports.MetricSchema = new Schema({
         us: String
     },
 
+    isDetail: Boolean,
     settings: [MetricSettingSchema]
-    
+
 }, {collection: 'monitoring.metrics'});
 
 mongoose.model('Metric', MetricSchema);
