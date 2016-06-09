@@ -7,10 +7,11 @@ const ModuleBase = require('../core').ModuleBase;
 const ServantMessage = require('../message').ServantMessage;
 
 const logger = require('../core').logger;
-const db = require('../core').db;
 
 const MODULE_NAME = 'monitoring';
 const MODULE_VERSION = '1.0';
+
+const DETAILS_INTERVAL = 5;
 
 class MonitoringModule extends ModuleBase {
 
@@ -30,6 +31,7 @@ class MonitoringModule extends ModuleBase {
         this._options = options;
 
         this._intervals = {};
+        this._settings = {};
 
         this.on('task.update-settings', this._onUpdateSettingsTask.bind(this));
 
@@ -40,7 +42,7 @@ class MonitoringModule extends ModuleBase {
         this.moduleDB.MetricModel.find({
             'settings.server_id': this.server._id,
             'settings.isActive': true
-        }, 'sys_name settings.$', (err, metrics) => {
+        }).select('sys_name isDetail settings.$').lean().exec((err, metrics) => {
             if (err) {
                 logger.error(err.message);
                 logger.verbose(err.stack);
@@ -63,7 +65,7 @@ class MonitoringModule extends ModuleBase {
                             logger.verbose(err.stack);
                         }
                     }
-                )
+                );
             }
         });
     }
@@ -106,7 +108,11 @@ class MonitoringModule extends ModuleBase {
     _metricHandler(metric, settings) {
         logger.info(`Running metric "${metric.sys_name}"`);
         
-        this._intervals[metric.sys_name] = setInterval(() => {
+        if (metric.isDetail) {
+            settings.interval = DETAILS_INTERVAL;
+        }
+        
+        const iterate = () => {
             for (let k in this._serverInstance.workers) {
                 if (this._serverInstance.workers.hasOwnProperty(k) &&
                     this._serverInstance.workers[k].worker.modules.indexOf('monitoring') >= 0) {
@@ -118,7 +124,15 @@ class MonitoringModule extends ModuleBase {
                     this._serverInstance.workers[k].sendMessage(message);
                 }
             }
+        };
+        
+        this._intervals[metric.sys_name] = setInterval(() => {
+            iterate();
         }, settings.interval * 60 * 1000);
+
+        this._settings[metric._id.toString()] = settings;
+
+        iterate();
     }
     
     _disposeMetric(metricName) {
@@ -146,7 +160,7 @@ class MonitoringModule extends ModuleBase {
                     } else {
                         const id = mongoose.Types.ObjectId(params.id);
 
-                        this.moduleDB.MetricModel.findOne({_id: id, 'settings.server_id': this.server._id}, 'sys_name settings.$', (err, metric) => {
+                        this.moduleDB.MetricModel.findOne({_id: id, 'settings.server_id': this.server._id}, 'sys_name isDetail settings.$', (err, metric) => {
                             if (err) {
                                 cb(err);
                             } else if (!metric) {
@@ -194,9 +208,141 @@ class MonitoringModule extends ModuleBase {
      * @private
      */
     _onCollectEvent(message, agent) {
-        if (message.data.metric === 'os_cpu') {
-            this._collectCPUData(message, agent)
+        switch (message.data.metric) {
+            case 'os_cpu':
+                this._collectCPUData(message, agent);
+                break;
+            case 'os_ram':
+                this._collectRAMData(message, agent);
+                break;
+            case 'node_details':
+                this._collectNodeDetailsData(message, agent);
+                break;
         }
+    }
+
+    /**
+     * 
+     * @param {Date} ts
+     * @returns {Array} {*[]}
+     * @private
+     */
+    static _getTimeInterval(ts) {
+        const ssd = new Date(ts);
+        ssd.setMinutes(0);
+        ssd.setSeconds(0);
+        ssd.setMilliseconds(0);
+
+        const sed = new Date(ts);
+        sed.setHours(ssd.getHours() + 1);
+        sed.setMinutes(0);
+        sed.setSeconds(0);
+        sed.setMilliseconds(0);
+        
+        return [ssd, sed];
+    }
+    
+    static _setMinValue(history, current) {
+        return history.min > current ? current : history.min;
+    }
+
+    static _setMaxValue(history, current) {
+        return history.max < current ? current : history.max;
+    }
+    
+    _createNotification(message, previous, current, threshold_kind, prior) {
+        return this.moduleDB.NotificationModel({
+            message: message,
+            provider: this._options.provider,
+            raw_value: {
+                previous: previous,
+                current: current
+            },
+            threshold_kind: threshold_kind,
+            prior: prior || 1
+        });
+    }
+
+    _checkThresholds(ts, event, message, current, agent, metricId, model, cb) {
+        const settings = this._settings[metricId.toString()];
+
+        if (event == null) {
+            (new model({
+                metric_id: metricId,
+                worker_id: agent.worker._id,
+                ts: ts,
+                values: message.data.value,
+                threshold_hits: {
+                    normal: {value: -1, hits: 0},
+                    warning: {value: 0, hits: 0},
+                    critical: {value: 0, hits: 0}
+                }
+            })).save((err) => {
+                cb(err);
+            });
+
+            return;
+        }
+
+        event.ts = ts;
+        event.values = message.data.value;
+
+        if (current < settings.threshold.warning.value && (event.threshold_hits.warning.value != 0 || event.threshold_hits.critical.value != 0)) {
+            ++event.threshold_hits.normal.hits;
+
+            if (event.threshold_hits.normal.value < 0) {
+                event.threshold_hits.normal.value = event.threshold_hits.critical.value || event.threshold_hits.warning.value;
+            }
+        } else {
+            event.threshold_hits.normal.hits = 0;
+        }
+
+        if (current >= settings.threshold.warning.value && current < settings.threshold.critical.value) {
+            ++event.threshold_hits.warning.hits;
+            event.threshold_hits.warning.value = event.threshold_hits.warning.value > 0 && event.threshold_hits.warning.hits > 0 ? event.threshold_hits.warning.value : current;
+        } else {
+            event.threshold_hits.warning.hits = 0;
+        }
+
+        if (current >= settings.threshold.critical.value) {
+            ++event.threshold_hits.critical.hits;
+            event.threshold_hits.critical.value = event.threshold_hits.critical.value > 0 && event.threshold_hits.critical.hits > 0 ? event.threshold_hits.critical.value : current;
+        } else {
+            event.threshold_hits.critical.hits = 0;
+        }
+
+        let notif;
+        if (event.threshold_hits.critical.hits >= settings.threshold.repeat) {
+            notif = this._createNotification(`Value is above ${settings.threshold.critical.value}%`, event.threshold_hits.critical.value, current, 2, 3);
+            event.threshold_hits.critical.hits = 0;
+        } else if (event.threshold_hits.warning.hits >= settings.threshold.repeat) {
+            notif = this._createNotification(`Value is above ${settings.threshold.warning.value}%`, event.threshold_hits.warning.value, current, 1, 1);
+            event.threshold_hits.warning.hits = 0;
+        } else if (event.threshold_hits.normal.hits >= settings.threshold.repeat) {
+            notif = this._createNotification(`Value is below ${settings.threshold.warning.value}%`, event.threshold_hits.normal.value, current, 0, 1);
+            event.threshold_hits.normal.hits = 0;
+            event.threshold_hits.normal.value = -1;
+
+            event.threshold_hits.warning.hits = 0;
+            event.threshold_hits.warning.value = 0;
+
+            event.threshold_hits.critical.hits = 0;
+            event.threshold_hits.critical.value = 0;
+        }
+
+        event.save((err) => {
+            if (err) {
+                cb(err);
+            } else {
+                if (notif) {
+                    notif.save((err) => {
+                        cb(err);
+                    });
+                } else {
+                    cb(null);
+                }
+            }
+        });
     }
 
     /**
@@ -206,35 +352,38 @@ class MonitoringModule extends ModuleBase {
      * @private
      */
     _collectCPUData(message, agent) {
+        let metricId;
         const ts = new Date();
         async.waterfall([
             (cb) => {
                 try {
-                    const metricId = mongoose.Types.ObjectId(message.data.id);
+                    metricId = mongoose.Types.ObjectId(message.data.id);
 
-                    this.moduleDB.CPUEventModel.findOneAndUpdate({worker_id: agent.worker._id}, {
-                        metric_id: metricId,
-                        worker_id: agent.worker._id,
-                        ts: ts,
-                        values: message.data.value
-                    }, {upsert: true}, (err) => {
-                        cb(err, metricId);
+                    this.moduleDB.CPUEventModel.findOne({worker_id: agent.worker._id}, (err, event) => {
+                        if (err) {
+                            cb(err);
+                        }  else {
+                            cb(null, event);
+                        }
                     });
+
                 } catch (e) {
                     cb(e);
                 }
             },
-            (metricId, cb) => {
-                var ssd = new Date(ts);
-                ssd.setMinutes(0);
-                ssd.setSeconds(0);
-                ssd.setMilliseconds(0);
+            (event, cb) => {
+                const totalLoad = message.data.value.map(function (item) {
+                    return item.total;
+                });
 
-                var sed = new Date(ts);
-                sed.setHours(ssd.getHours() + 1);
-                sed.setMinutes(0);
-                sed.setSeconds(0);
-                sed.setMilliseconds(0);
+                const val = totalLoad.reduce((pv, cv) => pv + cv, 0);
+
+                const current = Math.round(val / totalLoad.length);
+
+                this._checkThresholds(ts, event, message, current, agent, metricId, this.moduleDB.CPUEventModel, cb);
+            },
+            (cb) => {
+                let [ssd, sed] = MonitoringModule._getTimeInterval(ts);
 
                 this.moduleDB.CPUHistoryModel.findOne({worker_id: agent.worker._id, ts: {$gte: ssd, $lt: sed}}, (err, model) => {
                     if (err) {
@@ -259,16 +408,17 @@ class MonitoringModule extends ModuleBase {
                         let i = message.data.value.length;
                         while(i--) {
                             model.total_value[i].system.v += message.data.value[i].system;
-                            model.total_value[i].system.min = model.total_value[i].system.min > message.data.value[i].system ? message.data.value[i].system : model.total_value[i].system.min;
-                            model.total_value[i].system.max = model.total_value[i].system.max < message.data.value[i].system ? message.data.value[i].system : model.total_value[i].system.max;
+
+                            model.total_value[i].system.min = MonitoringModule._setMinValue(model.total_value[i].system, message.data.value[i].system);
+                            model.total_value[i].system.max = MonitoringModule._setMaxValue(model.total_value[i].system, message.data.value[i].system);
 
                             model.total_value[i].user.v += message.data.value[i].user;
-                            model.total_value[i].user.min = model.total_value[i].user.min > message.data.value[i].user ? message.data.value[i].user : model.total_value[i].user.min;
-                            model.total_value[i].user.max = model.total_value[i].user.max < message.data.value[i].user ? message.data.value[i].user : model.total_value[i].user.max;
+                            model.total_value[i].user.min = MonitoringModule._setMinValue(model.total_value[i].user, message.data.value[i].user);
+                            model.total_value[i].user.max = MonitoringModule._setMaxValue(model.total_value[i].user, message.data.value[i].user);
 
                             model.total_value[i].total.v += message.data.value[i].total;
-                            model.total_value[i].total.min = model.total_value[i].total.min > message.data.value[i].total ? message.data.value[i].total : model.total_value[i].total.min;
-                            model.total_value[i].total.max = model.total_value[i].total.max < message.data.value[i].total ? message.data.value[i].total : model.total_value[i].total.max;
+                            model.total_value[i].total.min = MonitoringModule._setMinValue(model.total_value[i].total, message.data.value[i].total);
+                            model.total_value[i].total.max = MonitoringModule._setMaxValue(model.total_value[i].total, message.data.value[i].total);
                         }
 
                         model.seq = ts.getMinutes();
@@ -292,6 +442,131 @@ class MonitoringModule extends ModuleBase {
             }
         });
     }
+
+    /**
+     *
+     * @param {ServantMessage} message
+     * @param {ServantClient} agent
+     * @private
+     */
+    _collectRAMData(message, agent) {
+        const ts = new Date();
+        let metricId;
+        async.waterfall([
+            (cb) => {
+                try {
+                    metricId = mongoose.Types.ObjectId(message.data.id);
+
+                    this.moduleDB.RAMEventModel.findOne({worker_id: agent.worker._id}, (err, event) => {
+                        if (err) {
+                            cb(err);
+                        }  else {
+                            cb(null, event);
+                        }
+                    });
+
+                } catch (e) {
+                    cb(e);
+                }
+            },
+            (event, cb) => {
+                const current = Math.round((message.data.value.total - message.data.value.free) / message.data.value.total * 100);
+                this._checkThresholds(ts, event, message, current, agent, metricId, this.moduleDB.RAMEventModel, cb);
+            },
+            (cb) => {
+                const [ssd, sed] = MonitoringModule._getTimeInterval(ts);
+
+                this.moduleDB.RAMHistoryModel.findOne({
+                    worker_id: agent.worker._id,
+                    ts: {$gte: ssd, $lt: sed}
+                }, (err, model) => {
+                    if (err) {
+                        cb(err);
+                    } else {
+                        if (!model) {
+                            model = new this.moduleDB.RAMHistoryModel({
+                                metric_id: metricId,
+                                worker_id: agent.worker._id,
+                                ts: ts,
+                                total_value: {
+                                    total: {v: 0, min: message.data.value.total.user, max: message.data.value.total},
+                                    free: {v: 0, min: message.data.value.free, max: message.data.value.free}
+                                },
+                                num_samples: 0,
+                                values: {}
+                            });
+                        }
+
+                        model.total_value.total.v += message.data.value.total;
+                        model.total_value.total.min = MonitoringModule._setMinValue(model.total_value.total, message.data.value.total);
+                        model.total_value.total.max = MonitoringModule._setMaxValue(model.total_value.total, message.data.value.total);
+
+                        model.total_value.free.v += message.data.value.free;
+                        model.total_value.free.min = MonitoringModule._setMinValue(model.total_value.free, message.data.value.free);
+                        model.total_value.free.max = MonitoringModule._setMaxValue(model.total_value.free, message.data.value.free);
+
+                        model.seq = ts.getMinutes();
+                        ++model.num_samples;
+
+                        model.values[model.seq.toString()] = message.data.value;
+
+                        model.markModified('values');
+                        model.save((err) => {
+                            cb(err);
+                        });
+                    }
+                });
+            }
+        ], (err) => {
+            if (err) {
+                logger.error(err.message);
+                logger.verbose(err.stack);
+            } else {
+                logger.verbose(`Successfully saved data from ${agent.hostname} of "${message.data.metric}" metric`);
+            }
+        });
+    }
+
+    /**
+     *
+     * @param {ServantMessage} message
+     * @param {ServantClient} agent
+     * @private
+     */
+    _collectNodeDetailsData(message, agent) {
+        const ts = new Date();
+        async.waterfall([
+            (cb) => {
+                try {
+                    const metricId = mongoose.Types.ObjectId(message.data.id);
+
+                    this.moduleDB.NodeDetailsModel.findOneAndUpdate({worker_id: agent.worker._id}, {
+                        metric_id: metricId,
+                        worker_id: agent.worker._id,
+                        ts: ts,
+                        values: {
+                            os: message.data.value.os,
+                            hostname: message.data.value.hostname,
+                            uptime: message.data.value.uptime,
+                            net: message.data.value.net
+                        }
+                    }, {upsert: true}, (err) => {
+                        cb(err);
+                    });
+                } catch (e) {
+                    cb(e);
+                }
+            }
+        ], (err) => {
+            if (err) {
+                logger.error(err.message);
+                logger.verbose(err.stack);
+            } else {
+                logger.verbose(`Successfully saved data from ${agent.hostname} of "${message.data.metric}" metric`);
+            }
+        });
+    }
+    
 }
 
 exports.MODULE_NAME = MODULE_NAME;
