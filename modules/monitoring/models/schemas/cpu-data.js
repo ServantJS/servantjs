@@ -34,6 +34,21 @@ const CPUEventSchema = exports.CPUEventSchema = new Schema({
     worker_id: {type: Schema.Types.ObjectId, ref: 'Worker', index: true},
     ts: {type: Date, index: {expires: '1d'}},
 
+    threshold_hits: {
+        normal: {
+            value: Number,
+            hits: Number
+        },
+        warning: {
+            value: Number,
+            hits: Number
+        },
+        critical: {
+            value: Number,
+            hits: Number
+        }
+    },
+
     values: [CPUItemSchema]
 }, {collection: 'monitoring.metrics.cpu.event'});
 
