@@ -31,6 +31,7 @@ const EventSchema = exports.EventSchema = new Schema({
     values: {
         os: OSSchema,
         uptime: Number,
+        status: Number,
         hostname: String,
         net: NetSchema
     }
