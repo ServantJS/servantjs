@@ -177,6 +177,8 @@ class SecurityModule extends ModuleBase {
                                 logger.debug(`Worker "${agent.hostname}": enabled modules - [${message.data.modules.join(' | ')}]`);
 
                                 agent.sendMessage(this.createMessage(SecurityModule.SaveTokenEventName, null, {token: token}));
+                                
+                                this._serverInstance.emit('client.authorized', agent);
                             }
                         });
                     });
@@ -191,7 +193,7 @@ class SecurityModule extends ModuleBase {
         if (agent.worker) {
             agent.worker.status = this._options.states.stopped;
             agent.worker.message = `Message: ${message}, code: ${code}`;
-            agent.worker.modules = [];
+            //agent.worker.modules = [];
 
             agent.worker.save((err) => {
                 if (err) {
