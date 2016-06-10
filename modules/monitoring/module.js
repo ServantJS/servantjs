@@ -2,6 +2,7 @@
 
 const async = require('async');
 const mongoose = require('mongoose');
+const extend = require('util')._extend;
 
 const ModuleBase = require('../core').ModuleBase;
 const ServantMessage = require('../message').ServantMessage;
@@ -107,11 +108,11 @@ class MonitoringModule extends ModuleBase {
 
     _metricHandler(metric, settings) {
         logger.info(`Running metric "${metric.sys_name}"`);
-        
+
         if (metric.isDetail) {
             settings.interval = DETAILS_INTERVAL;
         }
-        
+
         const iterate = () => {
             for (let k in this._serverInstance.workers) {
                 if (this._serverInstance.workers.hasOwnProperty(k) &&
@@ -125,7 +126,7 @@ class MonitoringModule extends ModuleBase {
                 }
             }
         };
-        
+
         this._intervals[metric.sys_name] = setInterval(() => {
             iterate();
         }, settings.interval * 60 * 1000);
@@ -134,7 +135,7 @@ class MonitoringModule extends ModuleBase {
 
         iterate();
     }
-    
+
     _disposeMetric(metricName) {
         if (this._intervals.hasOwnProperty(metricName)) {
             clearInterval(this._intervals[metricName]);
@@ -160,7 +161,10 @@ class MonitoringModule extends ModuleBase {
                     } else {
                         const id = mongoose.Types.ObjectId(params.id);
 
-                        this.moduleDB.MetricModel.findOne({_id: id, 'settings.server_id': this.server._id}, 'sys_name isDetail settings.$', (err, metric) => {
+                        this.moduleDB.MetricModel.findOne({
+                            _id: id,
+                            'settings.server_id': this.server._id
+                        }, 'sys_name isDetail settings.$', (err, metric) => {
                             if (err) {
                                 cb(err);
                             } else if (!metric) {
@@ -215,6 +219,9 @@ class MonitoringModule extends ModuleBase {
             case 'os_ram':
                 this._collectRAMData(message, agent);
                 break;
+            case 'os_net_a':
+                this._collectNetActivityData(message, agent);
+                break;
             case 'node_details':
                 this._collectNodeDetailsData(message, agent);
                 break;
@@ -222,7 +229,7 @@ class MonitoringModule extends ModuleBase {
     }
 
     /**
-     * 
+     *
      * @param {Date} ts
      * @returns {Array} {*[]}
      * @private
@@ -238,10 +245,10 @@ class MonitoringModule extends ModuleBase {
         sed.setMinutes(0);
         sed.setSeconds(0);
         sed.setMilliseconds(0);
-        
+
         return [ssd, sed];
     }
-    
+
     static _setMinValue(history, current) {
         return history.min > current ? current : history.min;
     }
@@ -249,7 +256,13 @@ class MonitoringModule extends ModuleBase {
     static _setMaxValue(history, current) {
         return history.max < current ? current : history.max;
     }
-    
+
+    static _setHistoryData(history, value) {
+        history.v += value;
+        history.min = MonitoringModule._setMinValue(history, value);
+        history.max = MonitoringModule._setMaxValue(history, value);
+    }
+
     _createNotification(message, previous, current, threshold_kind, prior) {
         return this.moduleDB.NotificationModel({
             message: message,
@@ -362,7 +375,7 @@ class MonitoringModule extends ModuleBase {
                     this.moduleDB.CPUEventModel.findOne({worker_id: agent.worker._id}, (err, event) => {
                         if (err) {
                             cb(err);
-                        }  else {
+                        } else {
                             cb(null, event);
                         }
                     });
@@ -385,7 +398,10 @@ class MonitoringModule extends ModuleBase {
             (cb) => {
                 let [ssd, sed] = MonitoringModule._getTimeInterval(ts);
 
-                this.moduleDB.CPUHistoryModel.findOne({worker_id: agent.worker._id, ts: {$gte: ssd, $lt: sed}}, (err, model) => {
+                this.moduleDB.CPUHistoryModel.findOne({
+                    worker_id: agent.worker._id,
+                    ts: {$gte: ssd, $lt: sed}
+                }, (err, model) => {
                     if (err) {
                         cb(err);
                     } else {
@@ -396,17 +412,19 @@ class MonitoringModule extends ModuleBase {
                                 ts: ts,
                                 total_value: message.data.value.map((item) => {
                                     return {
-                                        name: item.name, 
-                                        user: {v: 0, min: item.user, max: item.user}, 
+                                        name: item.name,
+                                        user: {v: 0, min: item.user, max: item.user},
                                         system: {v: 0, min: item.system, max: item.system},
-                                        total: {v: 0, min: item.total, max: item.total}}}),
+                                        total: {v: 0, min: item.total, max: item.total}
+                                    }
+                                }),
                                 num_samples: 0,
                                 values: {}
                             });
                         }
 
                         let i = message.data.value.length;
-                        while(i--) {
+                        while (i--) {
                             model.total_value[i].system.v += message.data.value[i].system;
 
                             model.total_value[i].system.min = MonitoringModule._setMinValue(model.total_value[i].system, message.data.value[i].system);
@@ -460,7 +478,7 @@ class MonitoringModule extends ModuleBase {
                     this.moduleDB.RAMEventModel.findOne({worker_id: agent.worker._id}, (err, event) => {
                         if (err) {
                             cb(err);
-                        }  else {
+                        } else {
                             cb(null, event);
                         }
                     });
@@ -566,7 +584,160 @@ class MonitoringModule extends ModuleBase {
             }
         });
     }
-    
+
+    /**
+     *
+     * @param {ServantMessage} message
+     * @param {ServantClient} agent
+     * @private
+     */
+    _collectNetActivityData(message, agent) {
+        let metricId;
+        const ts = new Date();
+        async.waterfall([
+            (cb) => {
+                try {
+                    metricId = mongoose.Types.ObjectId(message.data.id);
+
+                    this.moduleDB.NetActivityEventModel.findOne({worker_id: agent.worker._id}, (err, event) => {
+                        if (err) {
+                            cb(err);
+                        } else {
+                            cb(null, event);
+                        }
+                    });
+
+                } catch (e) {
+                    cb(e);
+                }
+            },
+            (event, cb) => {
+
+                const totalValue = message.data.value.total;
+                if (!totalValue) {
+                    return cb(new Error(`Incorrect data from agent "${agent.hostname}"`));
+                }
+
+                const current = totalValue.per_sec.bytes.input;
+
+                this._checkThresholds(ts, event, message, current, agent, metricId, this.moduleDB.NetActivityEventModel, cb);
+            },
+            (cb) => {
+                let [ssd, sed] = MonitoringModule._getTimeInterval(ts);
+
+                this.moduleDB.NetActivityHistoryModel.findOne({
+                    worker_id: agent.worker._id,
+                    ts: {$gte: ssd, $lt: sed}
+                }, (err, model) => {
+                    if (err) {
+                        cb(err);
+                    } else {
+                        if (!model) {
+                            let obj = JSON.parse(JSON.stringify(message.data.value));
+                            for (let k in obj) {
+                                if (obj.hasOwnProperty(k)) {
+                                    obj[k].packets = {
+                                        input: {v: 0, min: obj[k].packets.input, max: obj[k].packets.input},
+                                        output: {v: 0, min: obj[k].packets.output, max: obj[k].packets.output}
+                                    };
+                                    obj[k].bytes = {
+                                        input: {v: 0, min: obj[k].bytes.input, max: obj[k].bytes.input},
+                                        output: {v: 0, min: obj[k].bytes.output, max: obj[k].bytes.output}
+                                    };
+                                    obj[k].per_sec = {
+                                        packets: {
+                                            input: {
+                                                v: 0,
+                                                    min: obj[k].per_sec.packets.input,
+                                                    max: obj[k].per_sec.packets.input
+                                            },
+                                            output: {
+                                                v: 0,
+                                                    min: obj[k].per_sec.packets.output,
+                                                    max: obj[k].per_sec.packets.output
+                                            }
+                                        },
+                                        bytes: {
+                                            input: {
+                                                v: 0,
+                                                    min: obj[k].per_sec.bytes.input,
+                                                    max: obj[k].per_sec.bytes.input
+                                            },
+                                            output: {
+                                                v: 0,
+                                                    min: obj[k].per_sec.bytes.output,
+                                                    max: obj[k].per_sec.bytes.output
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            model = new this.moduleDB.NetActivityHistoryModel({
+                                metric_id: metricId,
+                                worker_id: agent.worker._id,
+                                ts: ts,
+                                total_value: obj,
+                                num_samples: 0,
+                                values: {}
+                            });
+                        }
+
+                        //let i = message.data.value.length;
+
+                        for (let k in message.data.value) {
+                            if (message.data.value.hasOwnProperty(k)) {
+                                MonitoringModule._setHistoryData(model.total_value[k].packets.input, message.data.value[k].packets.input);
+                                MonitoringModule._setHistoryData(model.total_value[k].packets.output, message.data.value[k].packets.output);
+
+                                MonitoringModule._setHistoryData(model.total_value[k].bytes.input, message.data.value[k].bytes.input);
+                                MonitoringModule._setHistoryData(model.total_value[k].bytes.output, message.data.value[k].bytes.output);
+
+                                MonitoringModule._setHistoryData(model.total_value[k].per_sec.packets.input, message.data.value[k].per_sec.packets.input);
+                                MonitoringModule._setHistoryData(model.total_value[k].per_sec.packets.output, message.data.value[k].per_sec.packets.output);
+
+                                MonitoringModule._setHistoryData(model.total_value[k].per_sec.bytes.input, message.data.value[k].per_sec.bytes.input);
+                                MonitoringModule._setHistoryData(model.total_value[k].per_sec.bytes.output, message.data.value[k].per_sec.bytes.output);
+                            }
+                        }
+                        
+                        /*while (i--) {
+                            MonitoringModule._setHistoryData(model.total_value[i].packets.input, message.data.value[i].packets.input);
+                            MonitoringModule._setHistoryData(model.total_value[i].packets.output, message.data.value[i].packets.output);
+
+                            MonitoringModule._setHistoryData(model.total_value[i].bytes.input, message.data.value[i].bytes.input);
+                            MonitoringModule._setHistoryData(model.total_value[i].bytes.output, message.data.value[i].bytes.output);
+
+                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.packets.input, message.data.value[i].per_sec.packets.input);
+                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.packets.output, message.data.value[i].per_sec.packets.output);
+                            
+                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.bytes.input, message.data.value[i].per_sec.bytes.input);
+                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.bytes.output, message.data.value[i].per_sec.bytes.output);
+                        }*/
+
+                        model.seq = ts.getMinutes();
+                        ++model.num_samples;
+
+                        model.values[model.seq.toString()] = message.data.value;
+
+                        model.markModified('values');
+                        model.markModified('total_value');
+                        model.save((err) => {
+                            cb(err);
+                        });
+                    }
+                });
+            }
+        ], (err) => {
+            if (err) {
+                logger.error(err.message);
+                logger.verbose(err.stack);
+            } else {
+                logger.verbose(`Successfully saved data from ${agent.hostname} of "${message.data.metric}" metric`);
+            }
+        });
+    }
+
 }
 
 exports.MODULE_NAME = MODULE_NAME;

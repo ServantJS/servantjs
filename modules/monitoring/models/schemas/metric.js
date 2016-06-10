@@ -17,9 +17,7 @@ const MetricSettingSchema = exports.MetricSettingSchema = new Schema({
 
     isActive: Boolean,
     interval: Number,
-
-    view_order: Number,
-
+    
     threshold: {
         repeat: Number,
         warning: {
@@ -47,6 +45,7 @@ const MetricSchema = exports.MetricSchema = new Schema({
         us: String
     },
 
+    view_order: Number,
     isDetail: Boolean,
     settings: [MetricSettingSchema]
 
