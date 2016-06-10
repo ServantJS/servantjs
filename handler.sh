@@ -11,7 +11,7 @@ INSTALL_BACKUP_FILE="${SERVANT_DIR}/.${NAME}_install.sh"
 
 function start {
     cd ${INSTALL_DIR}
-    forever start ${START_SCRIPT}
+    forever start -c 'node --harmony_destructuring' ${START_SCRIPT}
 }
 
 function stop {
