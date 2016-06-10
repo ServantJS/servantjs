@@ -36,14 +36,16 @@ class MonitoringModule extends ModuleBase {
 
         this.on('task.update-settings', this._onUpdateSettingsTask.bind(this));
 
+        this._serverInstance.on('client.authorized', this._onClientAuthorized.bind(this));
+        this._serverInstance.on('client.disconnect', this._onClientDisconnected.bind(this));
         this.init();
     }
 
     init() {
         this.moduleDB.MetricModel.find({
             'settings.server_id': this.server._id,
-            'settings.isActive': true
-        }).select('sys_name isDetail settings.$').lean().exec((err, metrics) => {
+            'settings.is_active': true
+        }).select('sys_name is_detail settings.$').lean().exec((err, metrics) => {
             if (err) {
                 logger.error(err.message);
                 logger.verbose(err.stack);
@@ -109,7 +111,7 @@ class MonitoringModule extends ModuleBase {
     _metricHandler(metric, settings) {
         logger.info(`Running metric "${metric.sys_name}"`);
 
-        if (metric.isDetail) {
+        if (metric.is_detail) {
             settings.interval = DETAILS_INTERVAL;
         }
 
@@ -164,7 +166,7 @@ class MonitoringModule extends ModuleBase {
                         this.moduleDB.MetricModel.findOne({
                             _id: id,
                             'settings.server_id': this.server._id
-                        }, 'sys_name isDetail settings.$', (err, metric) => {
+                        }, 'sys_name is_detail settings.$', (err, metric) => {
                             if (err) {
                                 cb(err);
                             } else if (!metric) {
@@ -172,7 +174,7 @@ class MonitoringModule extends ModuleBase {
                             } else {
                                 this._disposeMetric(metric.sys_name);
 
-                                if (metric.settings[0].isActive) {
+                                if (metric.settings[0].is_active) {
                                     this._metricHandler(metric, metric.settings[0]);
                                 }
 
@@ -277,6 +279,7 @@ class MonitoringModule extends ModuleBase {
     }
 
     _checkThresholds(ts, event, message, current, agent, metricId, model, cb) {
+        let notif;
         const settings = this._settings[metricId.toString()];
 
         if (event == null) {
@@ -300,47 +303,50 @@ class MonitoringModule extends ModuleBase {
         event.ts = ts;
         event.values = message.data.value;
 
-        if (current < settings.threshold.warning.value && (event.threshold_hits.warning.value != 0 || event.threshold_hits.critical.value != 0)) {
-            ++event.threshold_hits.normal.hits;
+        if (settings.threshold.is_enabled) {
 
-            if (event.threshold_hits.normal.value < 0) {
-                event.threshold_hits.normal.value = event.threshold_hits.critical.value || event.threshold_hits.warning.value;
+            if (current < settings.threshold.warning.value && (event.threshold_hits.warning.value != 0 || event.threshold_hits.critical.value != 0)) {
+                ++event.threshold_hits.normal.hits;
+
+                if (event.threshold_hits.normal.value < 0) {
+                    event.threshold_hits.normal.value = event.threshold_hits.critical.value || event.threshold_hits.warning.value;
+                }
+            } else {
+                event.threshold_hits.normal.hits = 0;
             }
-        } else {
-            event.threshold_hits.normal.hits = 0;
-        }
 
-        if (current >= settings.threshold.warning.value && current < settings.threshold.critical.value) {
-            ++event.threshold_hits.warning.hits;
-            event.threshold_hits.warning.value = event.threshold_hits.warning.value > 0 && event.threshold_hits.warning.hits > 0 ? event.threshold_hits.warning.value : current;
-        } else {
-            event.threshold_hits.warning.hits = 0;
-        }
+            if (current >= settings.threshold.warning.value && current < settings.threshold.critical.value) {
+                ++event.threshold_hits.warning.hits;
+                event.threshold_hits.warning.value = event.threshold_hits.warning.value > 0 && event.threshold_hits.warning.hits > 0 ? event.threshold_hits.warning.value : current;
+            } else {
+                event.threshold_hits.warning.hits = 0;
+            }
 
-        if (current >= settings.threshold.critical.value) {
-            ++event.threshold_hits.critical.hits;
-            event.threshold_hits.critical.value = event.threshold_hits.critical.value > 0 && event.threshold_hits.critical.hits > 0 ? event.threshold_hits.critical.value : current;
-        } else {
-            event.threshold_hits.critical.hits = 0;
-        }
+            if (current >= settings.threshold.critical.value) {
+                ++event.threshold_hits.critical.hits;
+                event.threshold_hits.critical.value = event.threshold_hits.critical.value > 0 && event.threshold_hits.critical.hits > 0 ? event.threshold_hits.critical.value : current;
+            } else {
+                event.threshold_hits.critical.hits = 0;
+            }
 
-        let notif;
-        if (event.threshold_hits.critical.hits >= settings.threshold.repeat) {
-            notif = this._createNotification(`Value is above ${settings.threshold.critical.value}%`, event.threshold_hits.critical.value, current, 2, 3);
-            event.threshold_hits.critical.hits = 0;
-        } else if (event.threshold_hits.warning.hits >= settings.threshold.repeat) {
-            notif = this._createNotification(`Value is above ${settings.threshold.warning.value}%`, event.threshold_hits.warning.value, current, 1, 1);
-            event.threshold_hits.warning.hits = 0;
-        } else if (event.threshold_hits.normal.hits >= settings.threshold.repeat) {
-            notif = this._createNotification(`Value is below ${settings.threshold.warning.value}%`, event.threshold_hits.normal.value, current, 0, 1);
-            event.threshold_hits.normal.hits = 0;
-            event.threshold_hits.normal.value = -1;
+            if (event.threshold_hits.critical.hits >= settings.threshold.repeat) {
+                notif = this._createNotification(`Value is above ${settings.threshold.critical.value}%`, event.threshold_hits.critical.value, current, 2, 3);
+                event.threshold_hits.critical.hits = 0;
+            } else if (event.threshold_hits.warning.hits >= settings.threshold.repeat) {
+                notif = this._createNotification(`Value is above ${settings.threshold.warning.value}%`, event.threshold_hits.warning.value, current, 1, 1);
+                event.threshold_hits.warning.hits = 0;
+            } else if (event.threshold_hits.normal.hits >= settings.threshold.repeat) {
+                notif = this._createNotification(`Value is below ${settings.threshold.warning.value}%`, event.threshold_hits.normal.value, current, 0, 1);
+                event.threshold_hits.normal.hits = 0;
+                event.threshold_hits.normal.value = -1;
 
-            event.threshold_hits.warning.hits = 0;
-            event.threshold_hits.warning.value = 0;
+                event.threshold_hits.warning.hits = 0;
+                event.threshold_hits.warning.value = 0;
 
-            event.threshold_hits.critical.hits = 0;
-            event.threshold_hits.critical.value = 0;
+                event.threshold_hits.critical.hits = 0;
+                event.threshold_hits.critical.value = 0;
+            }
+
         }
 
         event.save((err) => {
@@ -425,7 +431,12 @@ class MonitoringModule extends ModuleBase {
 
                         let i = message.data.value.length;
                         while (i--) {
-                            model.total_value[i].system.v += message.data.value[i].system;
+                            MonitoringModule._setHistoryData(model.total_value[i].system, message.data.value[i].system);
+                            MonitoringModule._setHistoryData(model.total_value[i].user, message.data.value[i].user);
+                            MonitoringModule._setHistoryData(model.total_value[i].total, message.data.value[i].total);
+
+
+                            /*model.total_value[i].system.v += message.data.value[i].system;
 
                             model.total_value[i].system.min = MonitoringModule._setMinValue(model.total_value[i].system, message.data.value[i].system);
                             model.total_value[i].system.max = MonitoringModule._setMaxValue(model.total_value[i].system, message.data.value[i].system);
@@ -436,7 +447,7 @@ class MonitoringModule extends ModuleBase {
 
                             model.total_value[i].total.v += message.data.value[i].total;
                             model.total_value[i].total.min = MonitoringModule._setMinValue(model.total_value[i].total, message.data.value[i].total);
-                            model.total_value[i].total.max = MonitoringModule._setMaxValue(model.total_value[i].total, message.data.value[i].total);
+                            model.total_value[i].total.max = MonitoringModule._setMaxValue(model.total_value[i].total, message.data.value[i].total);*/
                         }
 
                         model.seq = ts.getMinutes();
@@ -515,13 +526,16 @@ class MonitoringModule extends ModuleBase {
                             });
                         }
 
-                        model.total_value.total.v += message.data.value.total;
+                        MonitoringModule._setHistoryData(model.total_value.total, message.data.value.total);
+                        MonitoringModule._setHistoryData(model.total_value.free, message.data.value.free);
+
+                        /*model.total_value.total.v += message.data.value.total;
                         model.total_value.total.min = MonitoringModule._setMinValue(model.total_value.total, message.data.value.total);
                         model.total_value.total.max = MonitoringModule._setMaxValue(model.total_value.total, message.data.value.total);
 
                         model.total_value.free.v += message.data.value.free;
                         model.total_value.free.min = MonitoringModule._setMinValue(model.total_value.free, message.data.value.free);
-                        model.total_value.free.max = MonitoringModule._setMaxValue(model.total_value.free, message.data.value.free);
+                        model.total_value.free.max = MonitoringModule._setMaxValue(model.total_value.free, message.data.value.free);*/
 
                         model.seq = ts.getMinutes();
                         ++model.num_samples;
@@ -545,6 +559,28 @@ class MonitoringModule extends ModuleBase {
         });
     }
 
+    _onClientAuthorized(agent) {
+        if (this._intervals.hasOwnProperty('node_details')) {
+            this.moduleDB.NodeDetailsModel.update({worker_id: agent.worker._id}, {$set: {'values.status': 1}}, (err) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                }
+            });
+        }
+    }
+
+    _onClientDisconnected(code, message, agent) {
+        if (this._intervals.hasOwnProperty('node_details')) {
+            this.moduleDB.NodeDetailsModel.update({worker_id: agent.worker._id}, {$set: {'values.status': 0}}, (err) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                }
+            });
+        }
+    }
+    
     /**
      *
      * @param {ServantMessage} message
@@ -564,6 +600,7 @@ class MonitoringModule extends ModuleBase {
                         ts: ts,
                         values: {
                             os: message.data.value.os,
+                            status: 1,
                             hostname: message.data.value.hostname,
                             uptime: message.data.value.uptime,
                             net: message.data.value.net
@@ -683,8 +720,6 @@ class MonitoringModule extends ModuleBase {
                             });
                         }
 
-                        //let i = message.data.value.length;
-
                         for (let k in message.data.value) {
                             if (message.data.value.hasOwnProperty(k)) {
                                 MonitoringModule._setHistoryData(model.total_value[k].packets.input, message.data.value[k].packets.input);
@@ -700,20 +735,6 @@ class MonitoringModule extends ModuleBase {
                                 MonitoringModule._setHistoryData(model.total_value[k].per_sec.bytes.output, message.data.value[k].per_sec.bytes.output);
                             }
                         }
-                        
-                        /*while (i--) {
-                            MonitoringModule._setHistoryData(model.total_value[i].packets.input, message.data.value[i].packets.input);
-                            MonitoringModule._setHistoryData(model.total_value[i].packets.output, message.data.value[i].packets.output);
-
-                            MonitoringModule._setHistoryData(model.total_value[i].bytes.input, message.data.value[i].bytes.input);
-                            MonitoringModule._setHistoryData(model.total_value[i].bytes.output, message.data.value[i].bytes.output);
-
-                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.packets.input, message.data.value[i].per_sec.packets.input);
-                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.packets.output, message.data.value[i].per_sec.packets.output);
-                            
-                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.bytes.input, message.data.value[i].per_sec.bytes.input);
-                            MonitoringModule._setHistoryData(model.total_value[i].per_sec.bytes.output, message.data.value[i].per_sec.bytes.output);
-                        }*/
 
                         model.seq = ts.getMinutes();
                         ++model.num_samples;
