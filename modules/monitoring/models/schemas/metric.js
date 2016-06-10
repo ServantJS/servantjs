@@ -15,10 +15,11 @@ var SettingItemSchema = new Schema({
 const MetricSettingSchema = exports.MetricSettingSchema = new Schema({
     server_id: {type: Schema.Types.ObjectId, ref: 'Server'},
 
-    isActive: Boolean,
+    is_active: Boolean,
     interval: Number,
     
     threshold: {
+        is_enabled: Boolean,
         repeat: Number,
         warning: {
             value: Number,
@@ -46,7 +47,7 @@ const MetricSchema = exports.MetricSchema = new Schema({
     },
 
     view_order: Number,
-    isDetail: Boolean,
+    is_detail: Boolean,
     settings: [MetricSettingSchema]
 
 }, {collection: 'monitoring.metrics'});
