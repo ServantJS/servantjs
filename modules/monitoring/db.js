@@ -18,4 +18,7 @@ exports.NetActivityEventModel = mongoose.model('NetActivityEvent');
 
 exports.NodeDetailsModel = mongoose.model('NodeDetails');
 
+exports.HaProxyStatHistoryModel = mongoose.model('HaProxyStatHistory');
+exports.HaProxyStatEventEventModel = mongoose.model('HaProxyStatEvent');
+
 exports.NotificationModel = mongoose.model('Notification');

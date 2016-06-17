@@ -227,6 +227,9 @@ class MonitoringModule extends ModuleBase {
             case 'node_details':
                 this._collectNodeDetailsData(message, agent);
                 break;
+            case 'hp_stat':
+                this._collectHaProxyStatData(message, agent);
+                break;
         }
     }
 
@@ -759,6 +762,112 @@ class MonitoringModule extends ModuleBase {
         });
     }
 
+    /**
+     *
+     * @param {ServantMessage} message
+     * @param {ServantClient} agent
+     * @private
+     */
+    _collectHaProxyStatData(message, agent) {
+        let metricId;
+        const ts = new Date();
+        async.waterfall([
+            (cb) => {
+                try {
+                    metricId = mongoose.Types.ObjectId(message.data.id);
+
+                    this.moduleDB.HaProxyStatEventEventModel.findOne({worker_id: agent.worker._id}, (err, event) => {
+                        if (err) {
+                            cb(err);
+                        } else {
+                            cb(null, event);
+                        }
+                    });
+
+                } catch (e) {
+                    cb(e);
+                }
+            },
+            (event, cb) => {
+                if (event == null) {
+                    (new this.moduleDB.HaProxyStatEventEventModel({
+                        metric_id: metricId,
+                        worker_id: agent.worker._id,
+                        ts: ts,
+                        values: message.data.value,
+                        threshold_hits: {
+                            normal: {value: -1, hits: 0},
+                            warning: {value: 0, hits: 0},
+                            critical: {value: 0, hits: 0}
+                        }
+                    })).save((err) => {
+                        cb(err, null);
+                    });
+
+                    return;
+                }
+
+                let previousData = event.values;
+
+                event.ts = ts;
+                event.values = message.data.value;
+                event.markModified('values');
+                event.save((err) => {
+                    cb(err, previousData);
+                });
+            },
+            (previousData, cb) => {
+                let [ssd, sed] = MonitoringModule._getTimeInterval(ts);
+
+                this.moduleDB.HaProxyStatHistoryModel.findOne({
+                    worker_id: agent.worker._id,
+                    ts: {$gte: ssd, $lt: sed}
+                }, (err, model) => {
+                    if (err) {
+                        cb(err);
+                    } else {
+                        if (!model) {
+                            /*let obj = JSON.parse(JSON.stringify(message.data.value));
+                            for (let k in obj) {
+                                if (obj.hasOwnProperty(k)) {
+                                    obj[k].bytes = {
+                                        input: {v: 0, min: obj[k].bytes.input, max: obj[k].bytes.input},
+                                        output: {v: 0, min: obj[k].bytes.output, max: obj[k].bytes.output}
+                                    };
+                                }
+                            }*/
+
+                            model = new this.moduleDB.HaProxyStatHistoryModel({
+                                metric_id: metricId,
+                                worker_id: agent.worker._id,
+                                ts: ts,
+                                total_value: null,
+                                num_samples: 0,
+                                values: {}
+                            });
+                        }
+
+                        model.seq = ts.getMinutes();
+                        ++model.num_samples;
+
+                        model.values[model.seq.toString()] = message.data.value;
+
+                        model.markModified('values');
+                        model.save((err) => {
+                            cb(err);
+                        });
+                    }
+                });
+            }
+        ], (err) => {
+            if (err) {
+                logger.error(err.message);
+                logger.verbose(err.stack);
+            } else {
+                logger.verbose(`Successfully saved data from ${agent.hostname} of "${message.data.metric}" metric`);
+            }
+        });
+    }
 }
 
 exports.MODULE_NAME = MODULE_NAME;
