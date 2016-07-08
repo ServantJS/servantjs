@@ -193,7 +193,7 @@ class HAProxyModule extends ModuleBase {
                                         taskKey: task._id.toString(),
                                         config: model.container
                                             .map((item) =>
-                                                (item.kind !== GLOBAL_CONFIG_TYPE && item.kind !== DEFAULT_CONFIG_TYPE ? '#' + item.meta.map((item) => `${item.token_name}: ${item.value}`).join(', ') + '\n' : '') + item.content)
+                                                (item.kind !== GLOBAL_CONFIG_TYPE && item.kind !== DEFAULT_CONFIG_TYPE ? '#' + item.meta.map((item) => `${item.token_name}: ${item.value || ''}`).join(', ') + '\n' : '') + item.content)
                                             .join('\n\n')
                                     });
 
@@ -339,7 +339,7 @@ class HAProxyModule extends ModuleBase {
                                     msgData.config = config.container
                                         .filter((item) => item.status == 0)
                                         .map(
-                                            (item) => (item.kind !== GLOBAL_CONFIG_TYPE && item.kind !== DEFAULT_CONFIG_TYPE ? '#' + item.meta.map((item) => `${item.token_name}: ${item.value}`).join(', ') + '\n' : '') + item.content)
+                                            (item) => (item.kind !== GLOBAL_CONFIG_TYPE && item.kind !== DEFAULT_CONFIG_TYPE ? '#' + item.meta.map((item) => `${item.token_name}: ${item.value || ''}`).join(', ') + '\n' : '') + item.content)
                                         .join('\n\n')
                                 } else {
                                     msgData.dispose = true;
