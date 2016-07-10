@@ -22,6 +22,7 @@ class ModuleBase extends EventEmitter {
         this._serverDB = serverDB;
         this._moduleDB = moduleDB;
         this._server = server;
+        this._cache = new Map();
         this.statuses = statuses;
     }
 
@@ -102,6 +103,134 @@ class ModuleBase extends EventEmitter {
         return defer.promise();
     }
 
+    /**
+     *
+     * @param {ServantMessage} message
+     * @param {ServantClient} agent
+     * @public
+     */
+    onCommonEventComplete(message, agent) {
+        try {
+            if (this._cache.has(message.data.taskKey)) {
+                const cacheItem = this._cache.get(message.data.taskKey);
+                const task = cacheItem.task;
+
+                if (!task.report) {
+                    task.report = [];
+                }
+
+                if (!task.error) {
+                    task.error = [];
+                }
+
+                message.data.report.splice(0, 0, 'Worker: ' + agent.hostname);
+
+                task.report.push({
+                    worker_id: agent.worker._id,
+                    stack: message.data.report.join('\n')
+                });
+
+                if (message.error) {
+                    task.status = this.statuses.warning;
+                    task.error.push({
+                        worker_id: agent.worker._id,
+                        stack: 'Worker: ' + agent.hostname + '\n' + message.error
+                    });
+                }
+
+                if (cacheItem.agentsCount == task.report.length && task.error.length) {
+                    task.save((err) => {
+                        if (err) {
+                            logger.error(err.message);
+                            logger.verbose(err.stack);
+                        }
+                    });
+
+                    return;
+                }
+
+                if (cacheItem.agentsCount == task.report.length) {
+                    task.status = this.statuses.success;
+                    let action = 'save';
+
+                    if (message.event.indexOf('Remove') >= 0) {
+                        action = 'remove';
+                    }
+
+                    cacheItem.model[action]((err) => {
+                        if (err) {
+                            cb(err);
+                        } else {
+                            task.save((err) => {
+                                if (err) {
+                                    logger.error(err.message);
+                                    logger.verbose(err.stack);
+                                }
+                            });
+                        }
+                    });
+                }
+
+            } else {
+                logger.error(`Model for task "${message.data.taskKey}" not found in cache`);
+            }
+        } catch (e) {
+            logger.error(e.message);
+            logger.verbose(e.stack);
+        }
+    }
+
+    /**
+     *
+     * @param {Error} err
+     * @param {ServantMessage} message
+     * @param {TaskModel} task
+     * @param {[ServantClient]} agents
+     * @public
+     */
+    sendTask(err, message, task, agents) {
+        if (err) {
+            logger.error(err.message);
+            logger.verbose(err.stack);
+
+            task.internal_error = err.message;
+            task.status = this.statuses.error;
+            task.save((err) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                }
+            });
+        } else {
+            if (message) {
+                try {
+                    agents.forEach((agent) => {
+                        agent.sendMessage(message);
+                    });
+                } catch (e) {
+                    logger.error(e.message);
+                    logger.verbose(e.stack);
+                }
+            } else {
+                task.status = this.statuses.success;
+                task.save((err) => {
+                    if (err) {
+                        logger.error(err.message);
+                        logger.verbose(err.stack);
+                    }
+                });
+            }
+        }
+    }
+
+    /**
+     * 
+     * @param {String} event
+     * @param {String} error
+     * @param {Object} data
+     * @public
+     * @returns {*|ServantMessage}
+     */
     createMessage(event, error, data) {
         return new ServantMessage({
             module: this.name,

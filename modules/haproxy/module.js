@@ -42,7 +42,7 @@ class HAProxyModule extends ModuleBase {
         super(serverDB, moduleDB, server);
 
         this._serverInstance = serverInstance;
-        this._cache = new Map();
+        
         this._options = options;
 
         this.on('task.create-config', this._onCreateConfigTask.bind(this));
@@ -93,11 +93,11 @@ class HAProxyModule extends ModuleBase {
         }
 
         if (message.event === HAProxyModule.CreateEvent) {
-            this._onCommonEventComplete(message, agent);
+            this.onCommonEventComplete(message, agent);
         } else if (message.event === HAProxyModule.UpdateEvent) {
-            this._onCommonEventComplete(message, agent);
+            this.onCommonEventComplete(message, agent);
         } else if (message.event === HAProxyModule.RemoveEvent) {
-            this._onCommonEventComplete(message, agent);
+            this.onCommonEventComplete(message, agent);
         } else {
             logger.warn(`[${this.name}] Unsupported event "${message.event}". Worker: ${agent.ip}`);
         }
@@ -149,7 +149,6 @@ class HAProxyModule extends ModuleBase {
                         (next) => {
                             try {
                                 const config = params.container[index];
-
 
                                 if (this.checkStringParam(config, 'name')) {
                                     return next(new Error('Missing "name" parameter'));
@@ -211,38 +210,7 @@ class HAProxyModule extends ModuleBase {
                 }
             }
         ], (err, message) => {
-            if (err) {
-                logger.error(err.message);
-                logger.verbose(err.stack);
-
-                originalTask.internal_error = err.message;
-                originalTask.status = this.statuses.error;
-                originalTask.save((err) => {
-                    if (err) {
-                        logger.error(err.message);
-                        logger.verbose(err.stack);
-                    }
-                });
-            } else {
-                if (message) {
-                    try {
-                        task.agents.forEach((agent) => {
-                            agent.sendMessage(message);
-                        });
-                    } catch (e) {
-                        logger.error(e.message);
-                        logger.verbose(e.stack);
-                    }
-                } else {
-                    originalTask.status = this.statuses.success;
-                    originalTask.save((err) => {
-                        if (err) {
-                            logger.error(err.message);
-                            logger.verbose(err.stack);
-                        }
-                    });
-                }
-            }
+            this.sendTask(err, message, originalTask, task.agents);
         });
     }
 
@@ -356,28 +324,7 @@ class HAProxyModule extends ModuleBase {
                 }
             }
         ], (err, message) => {
-            if (err) {
-                logger.error(err.message);
-                logger.verbose(err.stack);
-
-                originalTask.internal_error = err.message;
-                originalTask.status = this.statuses.error;
-                originalTask.save((err) => {
-                    if (err) {
-                        logger.error(err.message);
-                        logger.verbose(err.stack);
-                    }
-                });
-            } else {
-                try {
-                    task.agents.forEach((agent) => {
-                        agent.sendMessage(message);
-                    });
-                } catch (e) {
-                    logger.error(e.message);
-                    logger.verbose(e.stack);
-                }
-            }
+            this.sendTask(err, message, originalTask, task.agents);
         });
     }
 
@@ -427,106 +374,8 @@ class HAProxyModule extends ModuleBase {
                 cb(null, message);
             }
         ], (err, message) => {
-            if (err) {
-                logger.error(err.message);
-                logger.verbose(err.stack);
-
-                originalTask.internal_error = err.message;
-                originalTask.status = this.statuses.error;
-                originalTask.save((err) => {
-                    if (err) {
-                        logger.error(err.message);
-                        logger.verbose(err.stack);
-                    }
-                });
-            } else {
-                try {
-                    task.agents.forEach((agent) => {
-                        agent.sendMessage(message);
-                    });
-                } catch (e) {
-                    logger.error(e.message);
-                    logger.verbose(e.stack);
-                }
-            }
+            this.sendTask(err, message, originalTask, task.agents);
         });
-    }
-
-    /**
-     *
-     * @param {ServantMessage} message
-     * @param {ServantClient} agent
-     * @private
-     */
-    _onCommonEventComplete(message, agent) {
-        try {
-            if (this._cache.has(message.data.taskKey)) {
-                const cacheItem = this._cache.get(message.data.taskKey);
-                const task = cacheItem.task;
-
-                if (!task.report) {
-                    task.report = [];
-                }
-
-                if (!task.error) {
-                    task.error = [];
-                }
-
-                message.data.report.splice(0, 0, 'Worker: ' + agent.hostname);
-
-                task.report.push({
-                    worker_id: agent.worker._id,
-                    stack: message.data.report.join('\n')
-                });
-
-                if (message.error) {
-                    task.status = this.statuses.warning;
-                    task.error.push({
-                        worker_id: agent.worker._id,
-                        stack: 'Worker: ' + agent.hostname + '\n' + message.error
-                    });
-                }
-
-                if (cacheItem.agentsCount == task.report.length && task.error.length) {
-                    task.save((err) => {
-                        if (err) {
-                            logger.error(err.message);
-                            logger.verbose(err.stack);
-                        }
-                    });
-
-                    return;
-                }
-
-                if (cacheItem.agentsCount == task.report.length) {
-                    task.status = this.statuses.success;
-                    let action = 'save';
-
-                    if (message.event == HAProxyModule.RemoveEvent) {
-                        action = 'remove';
-                    }
-
-                    cacheItem.model[action]((err) => {
-                        if (err) {
-                            cb(err);
-                        } else {
-                            task.save((err) => {
-                                if (err) {
-                                    logger.error(err.message);
-                                    logger.verbose(err.stack);
-                                }
-                            });
-                        }
-                    });
-                }
-
-            } else {
-                logger.error(`Model for task "${message.data.taskKey}" not found in cache`);
-            }
-        } catch (e) {
-            logger.error(e.message);
-            logger.verbose(e.stack);
-        }
     }
 }
 
