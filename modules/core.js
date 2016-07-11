@@ -57,7 +57,7 @@ class ModuleBase extends EventEmitter {
      * @public
      */
     sendError(text, agent) {
-        agent.sendMessage(this.createMessage('Error', text));
+        agent.sendMessage(this.createMessage('Error', text, null));
         agent.socket.close();
 
         logger.warn(`[${this.name}]: Close connection for: ${agent.ip}. Reason: ${text}`);
