@@ -357,7 +357,7 @@ class HAProxyModule extends ModuleBase {
                     if (err) {
                         cb(err);
                     } else if (!config) {
-                        cb(new Error(`HAProxy config "${params.name || params.id.toString()}" not found`));
+                        cb(new Error(`HAProxy config "${params.id.toString()}" not found`));
                     } else {
                         cb(null, config);
                     }
