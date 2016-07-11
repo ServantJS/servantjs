@@ -342,9 +342,7 @@ class HAProxyModule extends ModuleBase {
                     cb(new Error('Missing "id" parameter'));
                 } else {
                     try {
-                        if (params.hasOwnProperty('id')) {
-                            params.id = mongoose.Types.ObjectId(params.id);
-                        }
+                        params.id = mongoose.Types.ObjectId(params.id);
 
                         cb();
                     } catch (e) {
