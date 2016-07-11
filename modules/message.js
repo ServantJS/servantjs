@@ -3,7 +3,7 @@
 class ServantMessage {
     static checkString(str, name) {
         if (!(str && typeof str === 'string' && str.trim().length)) {
-            throw new Error('Missing or incorrect type of "{0}".'.f(name));
+            throw new Error(`Missing or incorrect type of "${name}".`);
         } else {
             return str;
         }
@@ -11,7 +11,7 @@ class ServantMessage {
 
     static checkArray(array, name) {
         if (!(array && Array.isArray(array) && array.length)) {
-            throw new Error('Missing or incorrect type of "{0}".'.f(name));
+            throw new Error(`Missing or incorrect type of "${name}".`);
         } else {
             return array;
         }
