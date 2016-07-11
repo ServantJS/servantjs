@@ -159,7 +159,8 @@ class ModuleBase extends EventEmitter {
 
                     cacheItem.model[action]((err) => {
                         if (err) {
-                            cb(err);
+                            logger.error(err.message);
+                            logger.verbose(err.stack);
                         } else {
                             task.save((err) => {
                                 if (err) {
