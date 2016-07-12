@@ -26,12 +26,18 @@ class SecurityModule extends ModuleBase {
     constructor(serverDB, moduleDB, serverInstance, server, options) {
         super(serverDB, moduleDB, server);
 
-        if (!options.keyFilePath) {
-            throw new Error('Missing "KeyFilePath" options.');
+        if (!(options.keyFilePath || options.accessKey)) {
+            throw new Error('Missing access key options.');
         }
 
         this._serverInstance = serverInstance;
-        this._keyFile = fs.readFileSync(options.keyFilePath).toString();
+
+        if (options.keyFilePath) {
+            this._secureKey = fs.readFileSync(options.keyFilePath).toString();
+        } else {
+            this._secureKey = options.accessKey;
+        }
+
         this._options = options;
 
         this.on('worker.send-key', this._onSendKey);
@@ -119,7 +125,7 @@ class SecurityModule extends ModuleBase {
             return this.sendError(e.message, agent);
         }
 
-        if (message.data.key === this._keyFile) {
+        if (message.data.key === this._secureKey) {
             const token = this.moduleDB.SessionModel.generateToken(agent.ip, agent.hostname);
             new this.moduleDB.SessionModel({
                 token: token,
