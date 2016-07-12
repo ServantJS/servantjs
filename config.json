@@ -14,13 +14,13 @@
   "modules": [
     {
       "name": "security",
-      "keyFilePath": "./file.key"
+      "accessKey": "123"
     },
     {
       "name": "haproxy",
       "depends": {
         "middlewares": ["check-workers"],
-        "modules": []
+        "modules": ["security"]
       }
     },
     {
@@ -28,7 +28,14 @@
       "provider": "slack",
       "depends": {
         "middlewares": ["check-workers"],
-        "modules": []
+        "modules": ["security"]
+      }
+    },
+    {
+      "name": "nginx",
+      "depends": {
+        "middlewares": ["check-workers"],
+        "modules": ["security"]
       }
     }
   ]
