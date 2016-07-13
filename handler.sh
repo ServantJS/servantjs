@@ -25,6 +25,10 @@ function status {
 }
 
 function update {
+    stop
+
+    cd ../
+
     cp -r ${INSTALL_DIR} ${BACKUP_DIR}
     rm -f ${LINK_PATH}
 
@@ -45,6 +49,8 @@ function update {
     fi
 
     rm -f ${INSTALL_BACKUP_FILE}
+
+    start
 }
 
 case "$1" in
