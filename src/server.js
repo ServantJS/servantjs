@@ -57,6 +57,10 @@ class ServantServer extends MiddlewareStack {
         return this._stacks;
     }
 
+    /**
+     * 
+     * @returns {{ServantClient}|*}
+     */
     get workers() {
         return this._workers;
     }
