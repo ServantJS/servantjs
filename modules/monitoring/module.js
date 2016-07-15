@@ -38,12 +38,6 @@ class MonitoringModule extends ModuleBase {
 
         this._serverInstance.on('client.authorized', this._onClientAuthorized.bind(this));
         this._serverInstance.on('client.disconnect', this._onClientDisconnected.bind(this));
-        
-        this.init();
-    }
-
-    init() {
-
     }
 
     /**
@@ -51,6 +45,13 @@ class MonitoringModule extends ModuleBase {
      */
     static get CollectEvent() {
         return 'Collect';
+    }
+
+    /**
+     * @return {string}
+     */
+    static get UpdateSettingsEvent() {
+        return 'UpdateSettings';
     }
 
     get name() {
@@ -81,45 +82,6 @@ class MonitoringModule extends ModuleBase {
         }
     }
 
-    _metricHandler(metric, settings) {
-        logger.info(`Running metric "${metric.sys_name}"`);
-
-        if (metric.is_detail) {
-            settings.interval = DETAILS_INTERVAL;
-        }
-
-        const iterate = () => {
-            for (let k in this._serverInstance.workers) {
-                if (this._serverInstance.workers.hasOwnProperty(k) &&
-                    this._serverInstance.workers[k].worker.modules.indexOf('monitoring') >= 0) {
-                    const message = this.createMessage(MonitoringModule.CollectEvent, null, {
-                        id: metric._id,
-                        metric: metric.sys_name
-                    });
-
-                    this._serverInstance.workers[k].sendMessage(message);
-                }
-            }
-        };
-
-        this._intervals[metric.sys_name] = setInterval(() => {
-            iterate();
-        }, settings.interval * 60 * 1000);
-
-        this._settings[metric._id.toString()] = settings;
-
-        iterate();
-    }
-
-    _disposeMetric(metricName) {
-        if (this._intervals.hasOwnProperty(metricName)) {
-            clearInterval(this._intervals[metricName]);
-            delete this._intervals[metricName];
-
-            logger.info(`Metric "${metricName}" stopped`);
-        }
-    }
-
     /**
      *
      * @param {Object} task
@@ -135,31 +97,47 @@ class MonitoringModule extends ModuleBase {
                         cb(new Error('Missing "id" parameter'));
                     } else {
                         const id = mongoose.Types.ObjectId(params.id);
-
-                        this.moduleDB.MetricModel.findOne({
-                            _id: id,
-                            'settings.server_id': this.server._id
-                        }, 'sys_name is_detail settings.$', (err, metric) => {
-                            if (err) {
-                                cb(err);
-                            } else if (!metric) {
-                                cb(new Error(`Metric "${params.id}" does not exist for server`));
-                            } else {
-                                this._disposeMetric(metric.sys_name);
-
-                                if (metric.settings[0].is_active) {
-                                    this._metricHandler(metric, metric.settings[0]);
-                                }
-
-                                cb(null, metric);
-                            }
-                        });
+                        cb(null, id);
                     }
                 } catch (e) {
                     cb(e);
                 }
+            },
+            (id, cb) => {
+                this.moduleDB.NodeDetailModel.findById(id, (err, node) => {
+                    if (err) {
+                        cb(err);
+                    }  else if (!node) {
+                        cb(new Error(`Node ${params.id} not found`));
+                    }  else {
+                        for (let key in this._serverInstance.workers) {
+                            if (this._serverInstance.workers.hasOwnProperty(key)) {
+                                let workerId = this._serverInstance.workers[key].worker._id;
+
+                                if (workerId.equals(node.worker_id)) {
+                                    cb(null, node, this._serverInstance.workers[key]);
+                                    return;
+                                }
+                            }
+                        }
+
+                        cb(new Error(`Worker ${node.worker_id.toString()} not found`));
+                    }
+                });
+            },
+            (node, agent, cb) => {
+                this.moduleDB.MetricSettingModel.find({node_id: node._id}, 'sys_name component disabled options', {lean: true}, (err, settings) => {
+                    if (err) {
+                        cb(err);
+                    } else {
+                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, settings);
+                        agent.sendMessage(message);
+
+                        cb(null);
+                    }
+                });
             }
-        ], (err, metric) => {
+        ], (err) => {
             if (err) {
                 logger.error(err.message);
                 logger.verbose(err.stack);
@@ -168,7 +146,7 @@ class MonitoringModule extends ModuleBase {
                 originalTask.status = this.statuses.error;
             } else {
                 originalTask.status = this.statuses.success;
-                logger.verbose(`Metric ${metric.sys_name} successfully updated`);
+                logger.verbose(`Metric settings for ${params.id} successfully updated`);
             }
 
             originalTask.save((err) => {
@@ -246,7 +224,17 @@ class MonitoringModule extends ModuleBase {
     
     _onClientAuthorized(agent) {
         if (agent.worker.modules.indexOf('monitoring') >= 0) {
-            this._runMetricsCollector(agent);
+            this.moduleDB.MetricSettingModel.find({}).populate({path: 'node_id', match: {worker_id: agent.worker._id}, select: '_id worker_id'}).select('sys_name node_id component disabled options').lean().exec((err, settings) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                } else {
+                    const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, settings.filter((i) => i.node_id != null));
+                    agent.sendMessage(message);
+
+                    this._runMetricsCollector(agent);
+                }
+            });
         }
     }
 
@@ -254,6 +242,13 @@ class MonitoringModule extends ModuleBase {
         if (this._intervals.hasOwnProperty(agent.hostname)) {
             clearInterval(this._intervals[agent.hostname]);
             delete this._intervals[agent.hostname];
+
+            this.moduleDB.NodeDetailModel.update({worker_id: agent.worker._id}, {$set: {status: 0}}, (err) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                }
+            });
         }
     }
     
@@ -264,10 +259,12 @@ class MonitoringModule extends ModuleBase {
      * @private
      */
     _collectNodeDetailsData(message, agent) {
-        const setData = function (data) {
+        const setData = (data) => {
             return {
                 ts: data.ts,
 
+                server_id: this.server._id,
+                worker_id: agent.worker._id,
                 node_type: data.node_type,
                 vendor: data.vendor,
                 hostname: data.hostname,
@@ -282,9 +279,9 @@ class MonitoringModule extends ModuleBase {
 
         let i = 0;
         async.whilst(
-            () => i < message.data.details.nodes.length,
+            () => i < message.data.details.length,
             (next) => {
-                const node = message.data.details.nodes[i++];
+                const node = message.data.details[i++];
                 let temp = node.status ? setData(node) : {$set: {status: 0}};
                 
                 this.moduleDB.NodeDetailModel.findOneAndUpdate({hostname: node.hostname},
@@ -367,8 +364,8 @@ class MonitoringModule extends ModuleBase {
             ], cb);
         };
 
-        if (message.data.metrics.nodes) {
-            async.each(message.data.metrics.nodes, (node, next) => {
+        if (message.data.metrics) {
+            async.each(message.data.metrics, (node, next) => {
                 this.moduleDB.NodeDetailModel.findOne({hostname: node.hostname}, '_id', {lean: true}, (err, model) => {
                     if (err) {
                         next(err);
