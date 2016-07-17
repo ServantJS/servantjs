@@ -110,14 +110,12 @@ class MonitoringModule extends ModuleBase {
                     }  else if (!node) {
                         cb(new Error(`Node ${params.id} not found`));
                     }  else {
-                        for (let key in this._serverInstance.workers) {
-                            if (this._serverInstance.workers.hasOwnProperty(key)) {
-                                let workerId = this._serverInstance.workers[key].worker._id;
-
-                                if (workerId.equals(node.worker_id)) {
-                                    cb(null, node, this._serverInstance.workers[key]);
-                                    return;
-                                }
+                        let i = this._serverInstance.workers.length;
+                        while (i--) {
+                            let workerId = this._serverInstance.workers[i].worker._id;
+                            if (workerId.equals(node.worker_id)) {
+                                cb(null, node, this._serverInstance.workers[i]);
+                                return;
                             }
                         }
 
@@ -243,7 +241,7 @@ class MonitoringModule extends ModuleBase {
             clearInterval(this._intervals[agent.hostname]);
             delete this._intervals[agent.hostname];
 
-            this.moduleDB.NodeDetailModel.update({worker_id: agent.worker._id}, {$set: {status: 0}}, (err) => {
+            this.moduleDB.NodeDetailModel.update({worker_id: agent.worker._id}, {$set: {status: 0}}, {multi: true}, (err) => {
                 if (err) {
                     logger.error(err.message);
                     logger.verbose(err.stack);

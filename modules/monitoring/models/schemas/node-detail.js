@@ -15,7 +15,7 @@ const SystemSchema = new Schema({
 
 const IPSchema = new Schema({
     address:String,
-    mask: String,
+    netmask: String,
     family: String
 }, {_id :false});
 

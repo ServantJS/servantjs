@@ -43,9 +43,9 @@ class ServantClient {
     }
 
     static _onClose(code, message) {
-        this.server.workers[this.ip] = null;
-        delete this.server.workers[this.ip];
-
+        const index = this.server.workers.indexOf(this);
+        this.server.workers.splice(index, 1);
+        
         logger.debug('Current agents: ' + this.server.currentAgentsCount);
 
         clearInterval(this.intervalId);
@@ -54,6 +54,9 @@ class ServantClient {
     }
 
     static _onError(error) {
+        logger.error(error.message);
+        logger.verbose(error.stack);
+
         this.server.emit('client.error', error);
     }
 

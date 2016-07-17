@@ -44,7 +44,7 @@ class ServantServer extends MiddlewareStack {
         this.server = null;
 
         this._wss = null;
-        this._workers = {};
+        this._workers = [];
         this._loop = null;
         this._state = states.unInit;
     }
@@ -66,16 +66,12 @@ class ServantServer extends MiddlewareStack {
     }
 
     get currentAgentsCount() {
-        return Object.keys(this._workers).length;
+        return this._workers.length;
     }
 
     _wsOnConnect(socket) {
-        if (this._workers.hasOwnProperty(socket.address())) {
-            this._workers[socket.address()].socket.close();
-        }
-
         var client = new ServantClient(this, socket);
-        this._workers[client.ip] = client;
+        this._workers.push(client);
 
         logger.debug('Current agents: ' + this.currentAgentsCount);
 

@@ -30,7 +30,7 @@ class SecurityMiddleWare extends MiddlewareBase {
             return next();
         }
 
-        if (!Object.keys(server.workers).length) {
+        if (!server.workers.length) {
             return next(new Error('Server does not have any connected workers'));
         }
 
@@ -44,15 +44,15 @@ class SecurityMiddleWare extends MiddlewareBase {
                     let agents = [];
                     for (let i = 0; i < group.workers.length; i++) {
                         let res = false;
-                        for (let key in server.workers) {
-                            if (server.workers.hasOwnProperty(key)) {
-                                let s = server.workers[key].worker._id;
 
-                                if (group.workers[i].equals(s)) {
-                                    res = true;
-                                    agents.push(server.workers[key]);
-                                    break;
-                                }
+                        let i = server.workers.length;
+                        while (i--) {
+                            let s = server.workers[i].worker._id;
+
+                            if (group.workers[i].equals(s)) {
+                                res = true;
+                                agents.push(server.workers[i]);
+                                break;
                             }
                         }
 
@@ -71,15 +71,13 @@ class SecurityMiddleWare extends MiddlewareBase {
                 } else if (!worker) {
                     next(new Error(`Worker "${task.target_id} not found`));
                 } else {
-                    let res = false;
-                    for (let key in server.workers) {
-                        if (server.workers.hasOwnProperty(key)) {
-                            let s = server.workers[key].worker._id;
+                    let i = server.workers.length;
+                    while (i--) {
+                        let s = server.workers[i].worker._id;
 
-                            if (worker._id.equals(s)) {
-                                task.agents = [server.workers[key]];
-                                return next();
-                            }
+                        if (worker._id.equals(s)) {
+                            task.agents = [server.workers[i]];
+                            return next();
                         }
                     }
 
