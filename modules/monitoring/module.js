@@ -2,7 +2,6 @@
 
 const async = require('async');
 const mongoose = require('mongoose');
-const extend = require('util')._extend;
 
 const ModuleBase = require('../core').ModuleBase;
 const ServantMessage = require('../message').ServantMessage;
@@ -11,8 +10,6 @@ const logger = require('../core').logger;
 
 const MODULE_NAME = 'monitoring';
 const MODULE_VERSION = '1.0';
-
-const DETAILS_INTERVAL = 5;
 
 class MonitoringModule extends ModuleBase {
 
@@ -128,7 +125,7 @@ class MonitoringModule extends ModuleBase {
                     if (err) {
                         cb(err);
                     } else {
-                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, settings);
+                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: settings});
                         agent.sendMessage(message);
 
                         cb(null);
@@ -172,41 +169,6 @@ class MonitoringModule extends ModuleBase {
         }
     }
 
-    /**
-     *
-     * @param {Date} ts
-     * @returns {Array} {*[]}
-     * @private
-     */
-    static _getTimeInterval(ts) {
-        const ssd = new Date(ts);
-        ssd.setMinutes(0);
-        ssd.setSeconds(0);
-        ssd.setMilliseconds(0);
-
-        const sed = new Date(ts);
-        sed.setHours(ssd.getHours() + 1);
-        sed.setMinutes(0);
-        sed.setSeconds(0);
-        sed.setMilliseconds(0);
-
-        return [ssd, sed];
-    }
-
-    static _setMinValue(history, current) {
-        return history.min > current ? current : history.min;
-    }
-
-    static _setMaxValue(history, current) {
-        return history.max < current ? current : history.max;
-    }
-
-    static _setHistoryData(history, value) {
-        history.v += value;
-        history.min = MonitoringModule._setMinValue(history, value);
-        history.max = MonitoringModule._setMaxValue(history, value);
-    }
-
     _runMetricsCollector(agent) {
         const iterate = () => {
             const message = this.createMessage(MonitoringModule.CollectEvent, null, null);
@@ -222,17 +184,21 @@ class MonitoringModule extends ModuleBase {
     
     _onClientAuthorized(agent) {
         if (agent.worker.modules.indexOf('monitoring') >= 0) {
-            this.moduleDB.MetricSettingModel.find({}).populate({path: 'node_id', match: {worker_id: agent.worker._id}, select: '_id worker_id'}).select('sys_name node_id component disabled options').lean().exec((err, settings) => {
-                if (err) {
-                    logger.error(err.message);
-                    logger.verbose(err.stack);
-                } else {
-                    const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, settings.filter((i) => i.node_id != null));
-                    agent.sendMessage(message);
+            this.moduleDB.MetricSettingModel.find({})
+                .populate({path: 'node_id', match: {worker_id: agent.worker._id}, select: '_id worker_id'})
+                .select('sys_name node_id component disabled options')
+                .lean()
+                .exec((err, settings) => {
+                    if (err) {
+                        logger.error(err.message);
+                        logger.verbose(err.stack);
+                    } else {
+                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: settings.filter((i) => i.node_id != null)});
+                        agent.sendMessage(message);
 
-                    this._runMetricsCollector(agent);
-                }
-            });
+                        this._runMetricsCollector(agent);
+                    }
+                });
         }
     }
 
@@ -279,13 +245,17 @@ class MonitoringModule extends ModuleBase {
         async.whilst(
             () => i < message.data.details.length,
             (next) => {
-                const node = message.data.details[i++];
-                let temp = node.status ? setData(node) : {$set: {status: 0}};
-                
-                this.moduleDB.NodeDetailModel.findOneAndUpdate({hostname: node.hostname},
-                    temp, {upsert: true}, (err) => {
-                        next(err);
-                    });
+                try {
+                    const node = message.data.details[i++];
+                    let temp = node.status ? setData(node) : {$set: {status: 0}};
+
+                    this.moduleDB.NodeDetailModel.findOneAndUpdate({hostname: node.hostname},
+                        temp, {upsert: true}, (err) => {
+                            next(err);
+                        });
+                } catch (e) {
+                    next(e);
+                }
             },
             (err) => {
                 if (err) {
@@ -296,6 +266,41 @@ class MonitoringModule extends ModuleBase {
                 }
             }
         );
+    }
+
+    /**
+     *
+     * @param {Date} ts
+     * @returns {Array} {*[]}
+     * @private
+     */
+    static _getTimeInterval(ts) {
+        const ssd = new Date(ts);
+        ssd.setMinutes(0);
+        ssd.setSeconds(0);
+        ssd.setMilliseconds(0);
+
+        const sed = new Date(ts);
+        sed.setHours(ssd.getHours() + 1);
+        sed.setMinutes(0);
+        sed.setSeconds(0);
+        sed.setMilliseconds(0);
+
+        return [ssd, sed];
+    }
+
+    static _setMinValue(history, current) {
+        return history.min > current ? current : history.min;
+    }
+
+    static _setMaxValue(history, current) {
+        return history.max < current ? current : history.max;
+    }
+
+    static _setHistoryData(history, value) {
+        history.v += value;
+        history.min = MonitoringModule._setMinValue(history, value);
+        history.max = MonitoringModule._setMaxValue(history, value);
     }
 
     /**
@@ -370,16 +375,21 @@ class MonitoringModule extends ModuleBase {
                     } else if (!model) {
                         next(new Error(`Node ${node.hostname} not found`));
                     } else {
-                        async.each(Object.keys(node.metrics), (k, next) => {
-                            const current = node.metrics[k];
+                        try {
+                            const keys = Object.keys(node.metrics);
+                            async.each(keys, (k, next) => {
+                                const current = node.metrics[k];
 
-                            current.name = k;
-                            current.ts = new Date(current.ts);
+                                current.name = k;
+                                current.ts = new Date(current.ts);
 
-                            saveMetric(model._id, k, current, next);
-                        }, (err) => {
-                            next(err);
-                        });
+                                saveMetric(model._id, k, current, next);
+                            }, (err) => {
+                                next(err);
+                            });
+                        } catch (e) {
+                            next(e);
+                        }
                     }
                 });
             }, (err) => {

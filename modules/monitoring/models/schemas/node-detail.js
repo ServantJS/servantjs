@@ -43,4 +43,28 @@ const NodeDetailSchema = exports.NodeDetailSchema = new Schema({
     inets: [INetSchema]
 }, {collection: 'monitoring.node.details'});
 
+const db = require('../../db');
+
+NodeDetailSchema.pre('remove', function (next) {
+    db.MetricDataModel.remove({node_id: this._id}, (err) => {
+        if (err) {
+            next(err);
+        } else {
+            db.MetricHistoryModel.remove({node_id: this._id}, (err) => {
+                if (err) {
+                    next(err);
+                } else {
+                    db.MetricSettingModel.remove({node_id: this._id}, (err) => {
+                        if (err) {
+                            next(err);
+                        } else {
+                            next();
+                        }
+                    });
+                }
+            });
+        }
+    });
+});
+
 mongoose.model('NodeDetail', NodeDetailSchema);
