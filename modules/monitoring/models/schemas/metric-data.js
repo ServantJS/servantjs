@@ -6,7 +6,7 @@ const Schema = mongoose.Schema;
 const MetricSettingSchema = exports.MetricSettingSchema = new Schema({
     node_id: {type: Schema.Types.ObjectId, index: true, ref: 'NodeDetail'},
 
-    sys_name: String,
+    sys_name: {type: String, index: true},
     component: String,
     disabled: Boolean,
 
@@ -16,7 +16,7 @@ const MetricSettingSchema = exports.MetricSettingSchema = new Schema({
 const MetricSchema = exports.MetricSchema = new Schema({
     node_id: {type: Schema.Types.ObjectId, index: true, ref: 'NodeDetail'},
 
-    sys_name: {type: String},
+    sys_name: {type: String, index: true},
     ts: {type: Date, index: {expires: '2m'}},
     measure: String,
     component: String,
@@ -27,7 +27,7 @@ const MetricSchema = exports.MetricSchema = new Schema({
 const MetricHistorySchema = exports.MetricHistorySchema = new Schema({
     node_id: {type: Schema.Types.ObjectId, index: true, ref: 'NodeDetail'},
 
-    sys_name: {type: String},
+    sys_name: {type: String, index: true},
     ts: {type: Date, index: {expires: '30d'}},
     measure: String,
     component: String,

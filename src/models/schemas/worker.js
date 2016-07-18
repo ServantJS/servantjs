@@ -16,7 +16,7 @@ const WorkerSchema = exports.WorkerSchema = new Schema({
     modules: [String]
 });
 
-WorkerSchema.pre('save', function (next) {
+WorkerSchema.pre('save', (next) => {
     this.dt = new Date();
 
     if (!this.sys_id) {
@@ -24,6 +24,10 @@ WorkerSchema.pre('save', function (next) {
     }
 
     next();
+});
+
+WorkerSchema.pre('remove', (next) => {
+    this.model('Task').remove({ target_id: this.sys_id }, next);
 });
 
 mongoose.model('Worker', WorkerSchema);

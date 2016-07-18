@@ -28,7 +28,7 @@ const TaskSchema = exports.TaskSchema = new Schema({
     report: [ReportSchema]
 });
 
-TaskSchema.pre('save', function (next) {
+TaskSchema.pre('save', (next) => {
     if (!this.isModified('dt')) {
         this.dt = new Date();
     }

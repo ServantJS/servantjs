@@ -112,16 +112,21 @@ class MonitoringModule extends ModuleBase {
                 });
             },
             (node, cb) => {
-                this.moduleDB.MetricSettingModel.find({node_id: node._id}, 'sys_name component disabled options', {lean: true}, (err, settings) => {
+                this.moduleDB.MetricSettingModel.find({node_id: node._id}, '-_id sys_name component disabled options', {lean: true}, (err, settings) => {
                     cb(err, node.worker_id, settings);
                 });
             },
             (workerId, settings, cb) => {
+                const data = settings.map((i) => {
+                    delete i.node_id;
+                    return i;
+                });
+
                 let i = this._serverInstance.workers.length;
                 while (i--) {
                     let workerId = this._serverInstance.workers[i].worker._id;
                     if (workerId.equals(workerId)) {
-                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: settings});
+                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: data});
                         this._serverInstance.workers[i].sendMessage(message);
                         return cb(null);
                     }
@@ -183,14 +188,19 @@ class MonitoringModule extends ModuleBase {
         if (agent.worker.modules.indexOf('monitoring') >= 0) {
             this.moduleDB.MetricSettingModel.find({})
                 .populate({path: 'node_id', match: {worker_id: agent.worker._id}, select: '_id worker_id'})
-                .select('sys_name node_id component disabled options')
+                .select('-_id sys_name node_id component disabled options')
                 .lean()
                 .exec((err, settings) => {
                     if (err) {
                         logger.error(err.message);
                         logger.verbose(err.stack);
                     } else {
-                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: settings.filter((i) => i.node_id != null)});
+                        const data = settings.filter((i) => i.node_id != null).map((i) => {
+                            delete i.node_id;
+                            return i;
+                        });
+
+                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: data});
                         agent.sendMessage(message);
 
                         this._runMetricsCollector(agent);
