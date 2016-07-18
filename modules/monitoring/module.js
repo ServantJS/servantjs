@@ -101,36 +101,33 @@ class MonitoringModule extends ModuleBase {
                 }
             },
             (id, cb) => {
-                this.moduleDB.NodeDetailModel.findById(id, (err, node) => {
+                this.moduleDB.NodeDetailModel.findById(id, 'worker_id', (err, node) => {
                     if (err) {
                         cb(err);
                     }  else if (!node) {
                         cb(new Error(`Node ${params.id} not found`));
                     }  else {
-                        let i = this._serverInstance.workers.length;
-                        while (i--) {
-                            let workerId = this._serverInstance.workers[i].worker._id;
-                            if (workerId.equals(node.worker_id)) {
-                                cb(null, node, this._serverInstance.workers[i]);
-                                return;
-                            }
-                        }
-
-                        cb(new Error(`Worker ${node.worker_id.toString()} not found`));
+                        cb(null, node.worker_id);
                     }
                 });
             },
-            (node, agent, cb) => {
+            (node, cb) => {
                 this.moduleDB.MetricSettingModel.find({node_id: node._id}, 'sys_name component disabled options', {lean: true}, (err, settings) => {
-                    if (err) {
-                        cb(err);
-                    } else {
-                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: settings});
-                        agent.sendMessage(message);
-
-                        cb(null);
-                    }
+                    cb(err, node.worker_id, settings);
                 });
+            },
+            (workerId, settings, cb) => {
+                let i = this._serverInstance.workers.length;
+                while (i--) {
+                    let workerId = this._serverInstance.workers[i].worker._id;
+                    if (workerId.equals(workerId)) {
+                        const message = this.createMessage(MonitoringModule.UpdateSettingsEvent, null, {rules: settings});
+                        this._serverInstance.workers[i].sendMessage(message);
+                        return cb(null);
+                    }
+                }
+
+                cb(null);
             }
         ], (err) => {
             if (err) {
