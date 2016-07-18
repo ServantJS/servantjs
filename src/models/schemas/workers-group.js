@@ -12,7 +12,7 @@ const WorkersGroupSchema = exports.WorkersGroupSchema = new Schema({
     workers: [{type: Schema.Types.ObjectId, ref: 'Worker'}]
 });
 
-WorkersGroupSchema.pre('save', (next) => {
+WorkersGroupSchema.pre('save', function (next) {
     this.dt = new Date();
 
     if (!this.sys_id) {

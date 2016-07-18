@@ -11,7 +11,7 @@ const ServerSchema = exports.ServerSchema = new Schema({
     status: Number
 });
 
-ServerSchema.pre('save', (next) => {
+ServerSchema.pre('save', function (next) {
     if (this.isModified('status')) {
         this.dt = new Date();
     }
