@@ -26,6 +26,11 @@ const INetSchema = new Schema({
     ip: [IPSchema]
 }, {_id :false});
 
+const MetricInfoSchema = new Schema({
+    sys_name: String,
+    component: String
+}, {_id :false});
+
 const NodeDetailSchema = exports.NodeDetailSchema = new Schema({
     server_id: {type: Schema.Types.ObjectId, ref: 'Server'},
     worker_id: {type: Schema.Types.ObjectId, ref: 'Worker'},
@@ -40,7 +45,8 @@ const NodeDetailSchema = exports.NodeDetailSchema = new Schema({
 
     system: SystemSchema,
     gw: String,
-    inets: [INetSchema]
+    inets: [INetSchema],
+    metrics: [MetricInfoSchema]
 }, {collection: 'monitoring.node.details'});
 
 const db = require('../../db');

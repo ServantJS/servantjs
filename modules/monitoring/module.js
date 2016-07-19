@@ -320,7 +320,7 @@ class MonitoringModule extends ModuleBase {
         const setData = function (nodeId, data) {
             return {
                 node_id: nodeId,
-                sys_name: data.name,
+                sys_name: data.name.replace('.' + data.component, ''),
                 ts: data.ts,
                 measure: data.measure,
                 component: data.component,
@@ -348,7 +348,9 @@ class MonitoringModule extends ModuleBase {
                         } else {
                             if (!model) {
                                 model = new this.moduleDB.MetricHistoryModel({
-                                    node_id: nodeId, sys_name: metricName, ts: current.ts,
+                                    node_id: nodeId,
+                                    sys_name: metricName.replace('.' + current.component, ''),
+                                    ts: current.ts,
                                     total_value: {v: 0, min: current.value, max: current.value},
                                     num_samples: 0,
                                     measure: current.measure,
@@ -375,6 +377,7 @@ class MonitoringModule extends ModuleBase {
         };
 
         if (message.data.metrics) {
+            const metricsUniqData = {};
             async.each(message.data.metrics, (node, next) => {
                 this.moduleDB.NodeDetailModel.findOne({hostname: node.hostname}, '_id', {lean: true}, (err, model) => {
                     if (err) {
@@ -392,7 +395,24 @@ class MonitoringModule extends ModuleBase {
 
                                 saveMetric(model._id, k, current, next);
                             }, (err) => {
-                                next(err);
+                                if (err) {
+                                    next(err);
+                                } else {
+                                    let i = keys.length;
+                                    const data = [];
+                                    while (i--) {
+                                        data.push({sys_name: keys[i], component: node.metrics[keys[i]].component});
+                                    }
+
+                                    if (!metricsUniqData.hasOwnProperty(model._id.toString())) {
+                                        metricsUniqData[model._id.toString()] = data;
+                                    } else {
+                                        metricsUniqData[model._id.toString()] = metricsUniqData[model._id.toString()].concat(data);
+                                    }
+
+                                    next();
+
+                                }
                             });
                         } catch (e) {
                             next(e);
@@ -404,6 +424,16 @@ class MonitoringModule extends ModuleBase {
                     logger.error(err.message);
                     logger.verbose(err.stack);
                 } else {
+
+                    for (let k in metricsUniqData) {
+                        this.moduleDB.NodeDetailModel.update({_id: k}, {$set: {metrics: metricsUniqData[k]}}, (err) =>{
+                            if (err) {
+                                logger.error(err.message);
+                                logger.verbose(err.stack);
+                            }
+                        });
+                    }
+
                     logger.verbose(`Successfully saved metrics data from "${agent.hostname}"`);
                 }
             });
