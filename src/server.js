@@ -88,18 +88,25 @@ class ServantServer extends MiddlewareStack {
 
     _onExit(err) {
         if (err) {
-            logger.error(err.name + ': ' + err.message);
+            logger.error(err.message);
             logger.verbose(err.stack);
         }
 
         this.server.status = err ? states.error : states.stopped;
         this.server.save((err) => {
             if (err) {
-                logger.error(err.name + ': ' + err.message);
+                logger.error(err.message);
                 logger.verbose(err.stack);
             }
 
-            process.exit(err ? 1 : process.exitCode ? process.exitCode : 0);
+            db.WorkerModel.update({server_id: this.server._id}, {$set: {status: states.stopped}}, (err) => {
+                if (err) {
+                    logger.error(err.message);
+                    logger.verbose(err.stack);
+                }
+
+                process.exit(err ? 1 : process.exitCode ? process.exitCode : 0);
+            });
         });
     }
 
@@ -180,16 +187,14 @@ class ServantServer extends MiddlewareStack {
         });
 
         async.waterfall([
-            (callback) => {
-                db.connect((err) => {
-                    callback(err);
-                });
+            (cb) => {
+                db.connect(cb);
             },
-            (callback) => {
+            (cb) => {
                 logger.verbose('Connect to DB: success');
                 db.ServerModel.findOne({server_name: os.hostname(), port: this.port}, (err, server) => {
                     if (err) {
-                        return callback(err);
+                        return cb(err);
                     } else if (!err && !server) {
                         logger.verbose('New server saved in db');
 
@@ -204,11 +209,18 @@ class ServantServer extends MiddlewareStack {
 
                     this.server = server;
 
-                    callback(err, server);
+                    cb(err, server);
                 });
             },
-            (server, callback) => {
-                server.save(callback);
+            (server, cb) => {
+                server.save((err) => {
+                    cb(err);
+                });
+            },
+            (cb) => {
+                db.WorkerModel.update({server_id: this.server._id}, {$set: {status: states.stopped}}, (err) => {
+                    cb(err);
+                });
             }
         ], (err) => {
             if (err) {
