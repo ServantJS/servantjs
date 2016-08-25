@@ -148,6 +148,10 @@ class ServantServer extends MiddlewareStack {
 
     loadModules() {
         this.modulesOptions.forEach((item) => {
+            if (!item.enabled) {
+                return;
+            }
+            
             item.states = states;
 
             const temp = require(path.join(path.dirname(module.parent.filename), 'modules', item.name))(db, this, this.server.toObject(), item);

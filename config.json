@@ -14,10 +14,12 @@
   "modules": [
     {
       "name": "security",
+      "enabled": true,
       "accessKey": "123"
     },
     {
       "name": "haproxy",
+      "enabled": true,
       "depends": {
         "middlewares": ["check-workers"],
         "modules": ["security"]
@@ -25,6 +27,7 @@
     },
     {
       "name": "monitoring",
+      "enabled": false,
       "provider": "slack",
       "depends": {
         "middlewares": ["check-workers"],
@@ -33,6 +36,7 @@
     },
     {
       "name": "nginx",
+      "enabled": true,
       "depends": {
         "middlewares": ["check-workers"],
         "modules": ["security"]
