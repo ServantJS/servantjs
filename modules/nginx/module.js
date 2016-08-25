@@ -373,7 +373,7 @@ class NGINXModule extends ModuleBase {
                         return cb(new Error(`Wrong status for "${config.name}". Accept only 0 or 1 value.`));
                     }
                     
-                    config.is_paused = !!params.isPaused;
+                    config.is_paused = !!params.status;
 
                     this._cache.set(task._id.toString(), {
                         model: config,
