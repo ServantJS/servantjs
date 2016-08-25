@@ -9,6 +9,7 @@ const NGINXConfigSchema = exports.NGINXConfigSchema = new Schema({
     name: String,
     content: String,
     status: Number,
+    is_paused: Boolean,
     kind: Number
 }, {collection: 'nginx.configs'});
 

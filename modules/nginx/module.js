@@ -167,6 +167,7 @@ class NGINXModule extends ModuleBase {
                         name: params.name,
                         content: content,
                         status: 0,
+                        is_paused: false,
                         kind: params.kind
                     });
 
@@ -236,6 +237,7 @@ class NGINXModule extends ModuleBase {
                         name: this.createConfigName(config.name),
                         content: config.content,
                         kind: config.kind,
+                        isPaused: config.is_paused,
                         sourceDir: config.group_id.source_dir
                     });
 
@@ -370,6 +372,8 @@ class NGINXModule extends ModuleBase {
                     if (config.status != 0 && config.status != 1) {
                         return cb(new Error(`Wrong status for "${config.name}". Accept only 0 or 1 value.`));
                     }
+                    
+                    config.is_paused = !!params.isPaused;
 
                     this._cache.set(task._id.toString(), {
                         model: config,
@@ -377,7 +381,7 @@ class NGINXModule extends ModuleBase {
                         task: originalTask
                     });
 
-                    const message = this.createMessage(NGINXModule.UpdateEvent, null, {
+                    const message = this.createMessage(NGINXModule.ChangeStatusEvent, null, {
                         taskKey: task._id.toString(),
                         status: config.status,
                         sourceDir: config.group_id.source_dir,
