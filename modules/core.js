@@ -149,7 +149,7 @@ class ModuleBase extends EventEmitter {
                     return;
                 }
 
-                if (cacheItem.agentsCount == task.report.length) {
+                if (cacheItem.hasOwnProperty('model') && cacheItem.agentsCount == task.report.length) {
                     task.status = this.statuses.success;
                     let action = 'save';
 
