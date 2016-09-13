@@ -15,6 +15,10 @@
     {
       "name": "security",
       "enabled": true,
+      "depends": {
+        "middlewares": [],
+        "modules": []
+      },
       "accessKey": "123"
     },
     {
@@ -28,7 +32,6 @@
     {
       "name": "monitoring",
       "enabled": false,
-      "provider": "slack",
       "depends": {
         "middlewares": ["check-workers"],
         "modules": ["security"]
