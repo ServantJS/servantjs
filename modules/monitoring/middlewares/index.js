@@ -1,7 +1,7 @@
 'use strict';
 
-module.exports = (serverDB) => {
+module.exports = (moduleDB) => {
     return [
-        //require('./middleware_file_name')(serverDB)
+        //require('./middleware_file_name')(moduleDB)
     ]
 };

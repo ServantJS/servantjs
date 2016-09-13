@@ -1,5 +1,5 @@
 'use strict';
 
-module.exports = (serverDB) => {
+module.exports = (moduleDB) => {
     return [ ]
 };

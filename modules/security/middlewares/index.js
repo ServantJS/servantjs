@@ -1,7 +1,7 @@
 'use strict';
 
-module.exports = (serverDB) => {
+module.exports = (moduleDB) => {
     return [
-        require('./check-token')(serverDB)
+        require('./check-token')(moduleDB)
     ]
 };
