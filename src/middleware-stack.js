@@ -12,8 +12,7 @@ const stages = [
     coreMW.MESSAGE_RECEIVED_STAGE,
     coreMW.MODULE_STAGE,
     coreMW.MESSAGE_SEND_STAGE,
-    coreMW.TASK_RECEIVED_STAGE,
-    coreMW.TASK_HANDLED_STAGE
+    coreMW.TASK_RECEIVED_STAGE
 ];
 
 class MiddlewareStack extends EventEmitter {
@@ -26,7 +25,6 @@ class MiddlewareStack extends EventEmitter {
         this._stacks[coreMW.MODULE_STAGE] = [];
         this._stacks[coreMW.MESSAGE_SEND_STAGE] = [];
         this._stacks[coreMW.TASK_RECEIVED_STAGE] = [];
-        this._stacks[coreMW.TASK_HANDLED_STAGE] = [];
 
         this._modules = {};
     }
