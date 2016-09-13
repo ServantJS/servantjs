@@ -57,7 +57,7 @@ class SecurityMiddleware extends MiddlewareBase {
     }
 }
 
-module.exports = (serverDB) => {
-    return new SecurityMiddleware(serverDB);
+module.exports = (moduleDB) => {
+    return new SecurityMiddleware(moduleDB);
 };
 
