@@ -6,7 +6,6 @@ const ModuleBase = require('../core').ModuleBase;
 const ServantMessage = require('../message').ServantMessage;
 
 const logger = require('../core').logger;
-const db = require('../core').db;
 
 const MODULE_NAME = 'security';
 const MODULE_VERSION = '1.0';
